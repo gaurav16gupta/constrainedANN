@@ -44,9 +44,20 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, size_t 
     k = k_; // topk op
     nc = nc_; // num clusters
 
-    //allocate dynamically if stack overflows
-    // float centroids[d*nc]; 
-    properties = properties_;
+    //transform properties to int
+    properties.resize(nb);
+    uint16_t cnt=0;
+    for (int i=0; i<nb; i++){
+        for (string prp: properties_[i]){
+            if (prLook.count(prp)==0){
+                prLook[prp]=cnt;
+                cnt++;
+            }
+            properties[i].push_back(prLook[prp]);
+        }
+        sort(properties[i].begin(), properties[i].end());
+    }
+    cout<<cnt<<" unique constrints"<<endl;
     // point ids against each cluster ID, flattened
 }
 //get  ClusterProperties and miniClusters
@@ -119,9 +130,9 @@ void FilterIndex::get_kmeans_index(string metric){
         for(uint32_t j = 0; j < nc; ++j){  
             temp =0;
             for(uint32_t k = 0; k < d; ++k) {                 
-                temp += dataset[i*d + k] * centroids[j*d +k];        
+                temp += pow(dataset[i*d + k] - centroids[j*d +k], 2);        
             } 
-            if ((cen_norms[i]- 2*temp)<minscore) {
+            if (temp<minscore) {
                 minscore=temp;
                 bin = j;}    
         }
@@ -130,7 +141,6 @@ void FilterIndex::get_kmeans_index(string metric){
     // for(int i = 0; i < 10; ++i) {  
     //     cout<<invLookup[i]<<" ";
     // }
-    cout<<"Got invLookup"<<endl;
     for(uint32_t i = 0; i < nb; ++i) {
         counts[invLookup[i]+1] = counts[invLookup[i]+1]+1;
       }
@@ -142,9 +152,9 @@ void FilterIndex::get_kmeans_index(string metric){
     iota(Lookup, Lookup+nb, 0);
     stable_sort(Lookup, Lookup+nb,
         [&invLookup](size_t i1, size_t i2) {return invLookup[i1] < invLookup[i2];});
-    for(int i = 0; i < 10; ++i) {  
-        cout<<counts[i]<<" ";
-    }
+    // for(int i = 0; i < 10; ++i) {  
+    //     cout<<counts[i]<<" ";
+    // }
     // for(int i = 0; i < 10; ++i) {  
     //     cout<<Lookup[i]<<" ";
     // }
@@ -162,18 +172,18 @@ void FilterIndex::get_cluster_propertiesIndex(){
         if (counts[clID+1]- counts[clID]==0) continue;
         ClusterProperties[clID] = properties[Lookup[counts[clID]]];
         for (int i =counts[clID]+1; i< counts[clID+1]; i++){
-            std::vector<string> tmp;
-            
+            std::vector<uint16_t> tmp;
             std::set_union(ClusterProperties[clID].begin(), ClusterProperties[clID].end(),  // Input iterators for first range 
                               properties[Lookup[i]].begin(), properties[Lookup[i]].end(), // Input iterators for second range 
                               std::back_inserter(tmp));            // Output iterator
             ClusterProperties[clID] = tmp; // do we need temp?
         }
+        
     }
     
     // cluster Inv Index
     for (int clID = 0; clID < ClusterProperties.size(); clID++){
-        for (string property : ClusterProperties[clID]){
+        for (uint16_t property : ClusterProperties[clID]){
             inverted_index[property].push_back(clID); //constraint:vectorNum
         }
     }
@@ -187,41 +197,51 @@ vector<vector<uint32_t>> FilterIndex::query(float* queryset, int nq, vector<vect
     vector<vector<uint32_t>> neighbor_set;
     // string s;
     // cin>>s;
-    cout<<nq<<endl;
+    cout<<"num queries: "<<nq<<endl;
     for (size_t i = 0; i < nq; i++){
         neighbor_set.push_back(findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances, m));
     }
     return neighbor_set;
 }
 
-float FilterIndex::PartialL2(float* a, float* b, float* b_norm, uint32_t id, float dist){
-    dist=0;
+// float FilterIndex::PartialL2(float* a, float* b, float* b_norm, uint32_t id, float dist){
+//     dist=0;
+//     for(uint32_t k = 0; k < d; ++k) {                 
+//         dist += a[k] * b[id*d +k];        
+//     } 
+//     dist = b_norm[id]- 2*dist;
+//     return dist;
+// }
+
+float FilterIndex::L2(float* a, float* b, uint32_t id){
+    float dist=0;
     for(uint32_t k = 0; k < d; ++k) {                 
-        dist += a[k] * b[id*d +k];        
+        dist += pow(a[k] - b[id*d +k],2); 
     } 
-    dist = b_norm[id]- 2*dist;
     return dist;
 }
 
 // get clusters (match_Cids), start from best and do filter then search, till you get topk
-vector<uint32_t> FilterIndex::findNearestNeighbor(float* query, vector<string> props, int num_results, int max_num_distances, int m)
+vector<uint32_t> FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, int m)
 {
     vector<float> topkDist;
+    vector<uint16_t> props;
+    for (string stprp: Stprops){
+        props.push_back(prLook[stprp]);
+    }
     vector<uint32_t> match_Cids = satisfyingIDs(props); // compare property match and cluster distance computations times. Which is bigger??
     //rank match_Cids
     priority_queue<pair<float, uint32_t> > pq;
     float dist;
     for (uint32_t id: match_Cids){
-        cout<<"id: "<< id<<endl;
-        PartialL2(query, centroids, cen_norms, id, dist);
+        dist = L2(query, centroids, id);
         pq.push({dist, id});
     }
-    
     // for each id in pq
     // filter then search bruteforce
     priority_queue<pair<float, uint32_t> > Candidates_pq;
     uint32_t seen=0, seenbin=0;
-    while(seen<k && seenbin<m){
+    while(seenbin<m){
         uint32_t bin = pq.top().second;
         pq.pop();
         seenbin++;
@@ -229,21 +249,25 @@ vector<uint32_t> FilterIndex::findNearestNeighbor(float* query, vector<string> p
             //check if constraint statisfies
             if (properties[Lookup[i]]== props){ //comparing two string vectors
                 seen++;
-                PartialL2(query, dataset, data_norms, Lookup[i], dist);
+                dist = L2(query, dataset, Lookup[i]);
                 Candidates_pq.push({dist, Lookup[i]});
             }
         }
     }
     vector<uint32_t> topk;
     topk.resize(k);
-    for (int i =1; i< k; i++){ 
+    if (Candidates_pq.size()>=k){
+    for (int i =0; i< k; i++){ 
+        // cout<<Candidates_pq.top().second<<endl;
         topk[i] = Candidates_pq.top().second;
         Candidates_pq.pop();
-    } 
+        cout<<topk[i]<<" ";
+    }
+    cout<<endl;}
     return topk;
 }
 
-vector<uint32_t> FilterIndex::satisfyingIDs(vector<string> props)
+vector<uint32_t> FilterIndex::satisfyingIDs(vector<uint16_t> props)
 {
     // Should take O(set size)
     //use uint16 or uint8 to reduce the size
@@ -260,7 +284,6 @@ vector<uint32_t> FilterIndex::satisfyingIDs(vector<string> props)
             break;  
         }    					
     }
-    
     return match_ids;
 }
 
@@ -298,9 +321,9 @@ int main()
     nq = 100;
     vector<vector<uint32_t>> query = myFilterIndex.query(queryset, nq, queryprops, 10, 300, 20);
     cout << "Querying done" << endl;
-    for (int coord : query[0]){
-        cout << coord << " ";
-    }
+    // for (int coord : query[0]){
+    //     cout << coord << " ";
+    // }
     // cout<<endl;
     // //load groundtruth
     // int* queryGT = ivecs_read("../data/sift/sift/label_sift_hard_groundtruth.ivecs", &d2, &nq);
