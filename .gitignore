@@ -1,0 +1,7 @@
+data/
+*.bin
+faiss/
+faiss-tool/
+index
+preFilterIndex
+libfaiss.so
