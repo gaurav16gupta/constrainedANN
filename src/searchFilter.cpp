@@ -12,16 +12,17 @@
 #include <cstdio>
 #include <random>
 #include <sys/time.h>
-#include <chrono>
 
 #include "cbloomfilter.h"
 #include "crambo.h"
 #include "readfile.h"
 #include "utils.h"
-#include "FilterIndex.h"
+#include "searchFilter.h"
 
 #include <faiss/Clustering.h>
 #include <faiss/IndexFlat.h>
+#include <faiss/index_factory.h>
+#include <faiss/AutoTune.h>
 #include <bits/stdc++.h>
 
 //include something for map
@@ -38,13 +39,13 @@ ostream& operator<<(ostream& os, const vector<S>& vector){
     return os;
 }
 
-FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, size_t k_, vector<vector<string>>properties_){
+searchFilter::searchFilter(float* data, size_t d_, size_t nb_, size_t nc_, size_t k_, vector<vector<string>>properties_){
     dataset = data; // data
     d =d_; // dim
     nb = nb_; //num data points
     k = k_; // topk op
     nc = nc_; // num clusters
-
+    IndexFlatL2 index(d);
     //transform properties to int
     properties.resize(nb);
     uint16_t cnt=0;
@@ -62,7 +63,7 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, size_t 
     // point ids against each cluster ID, flattened
 }
 //get  ClusterProperties and miniClusters
-void FilterIndex::get_kmeans_index(string metric){
+void searchFilter::get_kmeans_index(string metric){
     // float a = kmeans_clustering(d, nb, nc, dataset, centroids); 
     centroids = new float[d*nc]; //provide random nc vectors
     cen_norms = new float[nc]{0};
@@ -80,6 +81,7 @@ void FilterIndex::get_kmeans_index(string metric){
         //init: take uniform random points from the cluster
         int v[nb];
         randomShuffle(v , 0, nb);
+        // cout<<centroids[0]<<" "<<dataset[v[0]*d]<<endl;
         Clustering clus(d, nc);
         clus.centroids.resize(d*nc);
         for(uint32_t i = 0; i < nc; ++i) { 
@@ -91,8 +93,9 @@ void FilterIndex::get_kmeans_index(string metric){
         clus.verbose = d * nb * nc > (1L << 30);
         // display logs if > 1Gflop per iteration
 
-        IndexFlatL2 index(d);
         clus.train(nb, dataset, index);
+        // index.add(nc, clus.centroids.data());
+        // index.add(nb, dataset);
         memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * d * nc);
         cout<<"num centroids: "<<clus.centroids.size()<<endl; //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
         
@@ -120,9 +123,19 @@ void FilterIndex::get_kmeans_index(string metric){
     uint32_t* invLookup = new uint32_t[nb];
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]{0};
-    // this needs to be integrated in clustering, use openmp, use Strassen algorithm for matmul*
+    
     //get best score cluster
+    // #pragma omp parallel for 
+    // for(uint32_t i = 0; i < nb; ++i) { 
+    //     vector<uint32_t> idx;
+    //     vector<float> topkDist;
+    //     vector<uint32_t> topk;
+    //     topk= argTopK(dataset+ i*d, centroids, d, nc, idx, nc, 1, topkDist);
+    //     invLookup[i] = topk[0];  
+    // }
+    // // 423462 423569 38326 443868 444875 445443 468794 37651 444475 905274 
 
+    // this needs to be integrated in clustering, use openmp, use Strassen algorithm for matmul*
     #pragma omp parallel for  
     for(uint32_t i = 0; i < nb; ++i) {  
         float bin, minscore, temp;
@@ -136,23 +149,24 @@ void FilterIndex::get_kmeans_index(string metric){
                 minscore=temp;
                 bin = j;}    
         }
-        invLookup[i] = bin;    
+        invLookup[i] = bin;  
+        // 423462 423569 38326 443868 444875 445443 468794 37651 444475 905274 
     }
-    // for(int i = 0; i < 10; ++i) {  
-    //     cout<<invLookup[i]<<" ";
-    // }
+    for(int i = 0; i < 10; ++i) {  
+        cout<<invLookup[i]<<" ";
+    }
     for(uint32_t i = 0; i < nb; ++i) {
-        counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
+        counts[invLookup[i]+1] = counts[invLookup[i]+1]+1;
       }
     for(uint32_t j = 1; j < nc; ++j) {
-        counts[j] = counts[j]+ counts[j-1]; //cumsum 
+        counts[j] = counts[j]+ counts[j-1]; //cumsum
       }
     
     //argsort invLookup to get the Lookup
     iota(Lookup, Lookup+nb, 0);
     stable_sort(Lookup, Lookup+nb,
         [&invLookup](size_t i1, size_t i2) {return invLookup[i1] < invLookup[i2];});
-    // for(int i = 0; i < 10; ++i) {  
+    // for(int i = 0; i < 1000; ++i) {  
     //     cout<<counts[i]<<" ";
     // }
     // for(int i = 0; i < 10; ++i) {  
@@ -165,43 +179,55 @@ void FilterIndex::get_kmeans_index(string metric){
     cout<<"Got Lookup"<<endl;
 }   
 
-void FilterIndex::get_cluster_propertiesIndex(){
-    ClusterProperties.resize(nc);
-    for (int clID = 0; clID < nc; clID++){
-        //only if atleast one eelment in cluster
-        if (counts[clID+1]- counts[clID]==0) continue;
-        ClusterProperties[clID] = properties[Lookup[counts[clID]]];
-        for (int i =counts[clID]+1; i< counts[clID+1]; i++){
-            std::vector<uint16_t> tmp;
-            std::set_union(ClusterProperties[clID].begin(), ClusterProperties[clID].end(),  // Input iterators for first range 
-                              properties[Lookup[i]].begin(), properties[Lookup[i]].end(), // Input iterators for second range 
-                              std::back_inserter(tmp));            // Output iterator
-            ClusterProperties[clID] = tmp; // do we need temp?
-        }
+// void searchFilter::get_cluster_propertiesIndex(){
+//     ClusterProperties.resize(nc);
+//     for (int clID = 0; clID < nc; clID++){
+//         //only if atleast one eelment in cluster
+//         if (counts[clID+1]- counts[clID]==0) continue;
+//         ClusterProperties[clID] = properties[Lookup[counts[clID]]];
+//         for (int i =counts[clID]+1; i< counts[clID+1]; i++){
+//             std::vector<uint16_t> tmp;
+//             std::set_union(ClusterProperties[clID].begin(), ClusterProperties[clID].end(),  // Input iterators for first range 
+//                               properties[Lookup[i]].begin(), properties[Lookup[i]].end(), // Input iterators for second range 
+//                               std::back_inserter(tmp));            // Output iterator
+//             ClusterProperties[clID] = tmp; // do we need temp?
+//         }
         
-    }
+//     }
     
-    // cluster Inv Index
-    for (int clID = 0; clID < ClusterProperties.size(); clID++){
-        for (uint16_t property : ClusterProperties[clID]){
-            inverted_index[property].push_back(clID); //constraint:vectorNum
-        }
-    }
-    // Sort each vector in ascending order. 
-    for (auto v : inverted_index) {
-        std::sort(v.second.begin(), v.second.end());
-    }
-}
+//     // cluster Inv Index
+//     for (int clID = 0; clID < ClusterProperties.size(); clID++){
+//         for (uint16_t property : ClusterProperties[clID]){
+//             inverted_index[property].push_back(clID); //constraint:vectorNum
+//         }
+//     }
+//     // Sort each vector in ascending order. 
+//     for (auto v : inverted_index) {
+//         std::sort(v.second.begin(), v.second.end());
+//     }
+// }
 
-void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances, int m){
+void searchFilter::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances, int m){
     // vector<vector<uint32_t>> neighbor_set;
     // string s;
     // cin>>s;
+
+    // by index
+    // output buffers
+    // idx_t* I = new idx_t[nq * num_results]; //type part of faiss namespace
+    // float* D = new float[nq * num_results];
+    // index.search(nq, queryset, num_results, D, I);
+
     neighbor_set = new int32_t[nq*num_results];
+    neighbor_dist = new float[nq*num_results];
     cout<<"num queries: "<<nq<<endl;
     for (size_t i = 0; i < nq; i++){
         findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances, m, i);
     }
+    // for (int i=0;i<100; i++){
+    //     cout<<neighbor_set[i]<<" ";
+    //     cout<<(int32_t)I[i]<<endl;
+    // }
 }
 
 // float FilterIndex::PartialL2(float* a, float* b, float* b_norm, uint32_t id, float dist){
@@ -213,7 +239,7 @@ void FilterIndex::query(float* queryset, int nq, vector<vector<string>> querypro
 //     return dist;
 // }
 
-float FilterIndex::L2(float* a, float* b, uint32_t id){
+float searchFilter::L2(float* a, float* b, uint32_t id){
     float dist=0;
     for(uint32_t k = 0; k < d; ++k) {                 
         dist += pow(a[k] - b[id*d +k],2); 
@@ -222,24 +248,20 @@ float FilterIndex::L2(float* a, float* b, uint32_t id){
 }
 
 // get clusters (match_Cids), start from best and do filter then search, till you get topk
-void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, int m, size_t qnum)
-{   
+void searchFilter::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, int m, size_t qnum)
+{
     vector<float> topkDist;
     vector<uint16_t> props;
     for (string stprp: Stprops){
-        props.push_back(prLook[stprp]);
+        props.push_back(prLook[stprp]); // changes to int attributes
     }
-    vector<uint32_t> match_Cids = satisfyingIDs(props); // compare property match and cluster distance computations times. Which is bigger??
-    //rank match_Cids
     priority_queue<pair<float, uint32_t> > pq;
     float dist;
-    for (uint32_t id: match_Cids){
-        dist = L2sq(query, centroids+id*d, d);
-        // dist = L2(query, centroids, id);
-        pq.push({-dist, id});
-    }
-    // for each id in pq
-    // filter then search bruteforce
+    for(uint32_t j = 0; j < nc; ++j) {
+        dist = L2(query, centroids, j);
+        pq.push({-dist, j});
+      }
+
     priority_queue<pair<float, uint32_t> > Candidates_pq;
     int seen=0, seenbin=0;
     while(seenbin<m){
@@ -247,48 +269,63 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         pq.pop();
         seenbin++;
         for (int i =counts[bin]; i< counts[bin+1]; i++){
-            //check if constraint statisfies
-            if (properties[Lookup[i]]== props){ //comparing two string vectors
-                seen++;
-                dist = L2(query, dataset, Lookup[i]);
-                Candidates_pq.push({-dist, Lookup[i]});
-            }
+            seen++;
+            dist = L2(query, dataset, Lookup[i]);
+            Candidates_pq.push({-dist, Lookup[i]});
         }
     }
-    int setsize = min(num_results, seen);
-
-    uint32_t cnt= 0;
+    vector<uint32_t> topk;
+    vector<float> topkdist;
+    size_t setsize = min(max_num_distances, seen);
+    topk.resize(setsize);
+    topkdist.resize(setsize);
+    // try argpartition
+    // if (Candidates_pq.size()>=k){
     for (int i =0; i< setsize; i++){ 
-        neighbor_set[qnum*num_results+ cnt] = Candidates_pq.top().second;
+        // cout<<Candidates_pq.top().second<<endl;
+        topk[i] = Candidates_pq.top().second;
+        topkdist[i] = Candidates_pq.top().first;
         Candidates_pq.pop();
-        cnt++;
+        // cout<<topk[i]<<" ";
+    }
+    // filter
+   
+    int cnt= 0;
+    for (int i =0; i< setsize; i++){ 
+        if (properties[topk[i]]== props && cnt<num_results){
+        // if ( cnt<num_results){
+            // filtered_topk.push_back(topk[i]);
+            neighbor_set[qnum*num_results+ cnt] = topk[i];
+            neighbor_dist[qnum*num_results+ cnt] = sqrt(-topkdist[i]);
+            cnt++;
+        }
     }
     while(cnt<num_results){
         neighbor_set[qnum*num_results+ cnt] = -1;
+        neighbor_dist[qnum*num_results+ cnt] = 0;
         cnt++;
     }
-
 }
 
-vector<uint32_t> FilterIndex::satisfyingIDs(vector<uint16_t> props)
-{
-    // Should take O(set size)
-    //use uint16 or uint8 to reduce the size
-    vector<uint32_t> match_ids = inverted_index[props[0]];
-    for (int i =1; i< props.size(); i++){ //loops over all properties
-        // vector<uint32_t> valid_ids = ;
-        std::vector<uint32_t> tmp;
-        std::set_intersection(match_ids.begin(), match_ids.end(),  // Input iterators for first range 
-                              inverted_index[props[i]].begin(), inverted_index[props[i]].end(), // Input iterators for second range 
-                              std::back_inserter(tmp));            // Output iterator
+// vector<uint32_t> searchFilter::satisfyingIDs(vector<uint16_t> props)
+// {
+//     // Should take O(set size)
+//     //use uint16 or uint8 to reduce the size
+//     vector<uint32_t> match_ids = inverted_index[props[0]];
+//     for (int i =1; i< props.size(); i++){ //loops over all properties
+//         // vector<uint32_t> valid_ids = ;
+//         std::vector<uint32_t> tmp;
+//         std::set_intersection(match_ids.begin(), match_ids.end(),  // Input iterators for first range 
+//                               inverted_index[props[i]].begin(), inverted_index[props[i]].end(), // Input iterators for second range 
+//                               std::back_inserter(tmp));            // Output iterator
 
-        match_ids = tmp;   // Update the current result with the intersection of this iteration. 
-        if (match_ids.empty()) {   // If there is no intersection, we can stop here as any further intersections will be empty too. 
-            break;  
-        }    					
-    }
-    return match_ids;
-}
+//         match_ids = tmp;   // Update the current result with the intersection of this iteration. 
+//         if (match_ids.empty()) {   // If there is no intersection, we can stop here as any further intersections will be empty too. 
+//             break;  
+//         }    					
+//     }
+//     return match_ids;
+// }
 
 
 
@@ -297,22 +334,16 @@ int main()
     cout << "filterIndex running..." << endl;
 
     size_t d=128, nb=1000000,nc=1000, nq, k; 
-    // float* xt = fvecs_read("../data/sift/sift/sift_learn.fvecs", &d, &nt); // not needed now
     float* data = fvecs_read("../data/sift/sift/sift_base.fvecs", &d, &nb);
-    // for (int j=0;j<10;j++){
-    //     for (int i=0;i<128;i++){
-    //         cout<<data[i+j*128]<<' ';
-    //     }
-    //     cout<<endl;
-    // }
+ 
     vector<vector<string>> properties = getproperties("../data/sift/sift_label/label_sift_base.txt",' ');
     cout<<properties.size()<<endl;
     cout << "Data files read" << endl;
-    FilterIndex myFilterIndex(data, d, nb, nc, 10, properties);
+    searchFilter myIndex(data, d, nb, nc, 10, properties);
     string metric="L2";
 
-    myFilterIndex.get_kmeans_index(metric);
-    myFilterIndex.get_cluster_propertiesIndex();
+    myIndex.get_kmeans_index(metric);
+    // myFilterIndex.get_cluster_propertiesIndex();
     // for (int i; i<10; i++){
     //     cout<<myFilterIndex.ClusterProperties[i]<<endl;
     // }
@@ -321,27 +352,26 @@ int main()
     float* queryset = fvecs_read("../data/sift/sift/sift_query.fvecs", &d, &nq);
     vector<vector<string>> queryprops = getproperties("../data/sift/sift_label/label_sift_query.txt",' ');
     cout << "Query files read..." << endl;
-    nq = 10000;
+    nq = 10;
     k = 10;
-    chrono::time_point<chrono::high_resolution_clock> t1, t2, t3;
-    t1 = chrono::high_resolution_clock::now();
-    myFilterIndex.query(queryset, nq, queryprops, 10, 300, 5);
-    t2 = chrono::high_resolution_clock::now();
-    cout << "time to query: "<<chrono::duration_cast<chrono::microseconds>(t2 - t1).count()/1000000<<"sec"<<endl;;
-    int32_t* output = myFilterIndex.neighbor_set;
+    myIndex.query(queryset, nq, queryprops, k, 100, 5);
+    int32_t* output = myIndex.neighbor_set;
+    float* outputdist = myIndex.neighbor_dist;
+    cout << "Querying done" << endl;
     for (int i=0; i<k; i++){
         cout << output[i] << " ";
     }
     cout<<endl;
     //load groundtruth
     int* queryGTlabel = ivecs_read("../data/sift/sift/label_sift_hard_groundtruth.ivecs", &k, &nq);
-    // int* queryGT = ivecs_read("../data/sift/sift/sift_groundtruth.ivecs", &k, &nq);
+    int* queryGT = ivecs_read("../data/sift/sift/sift_groundtruth.ivecs", &k, &nq);
     for (int i; i<10; i++){
-        cout<<queryGTlabel[i]<<" ";
+        cout<<queryGT[i]<<" ";
     }
-    //recall
 
+    // recall
 
+    
 }
 
 //*https://github.com/vaibhawvipul/performance-engineering/blob/main/matrix_multiplication/matrix_strassen_looporder_omp.cpp

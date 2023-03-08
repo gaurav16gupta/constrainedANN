@@ -24,39 +24,48 @@
 //include something for map
 using namespace std;
 
-double computeRecall(vector<vector<int>> answer, vector<vector<int>> guess)
-{
-    //We assume that the size of the answer and guess vector are the same
-    //We assume that the answer has no repeats and is full for each vector
-    double total = 0;
-    double correct = 0;
-    for (size_t x = 0; x < answer.size(); x++)
-    {
-        double subtotal = 0;
-        double subcorrect = 0;
-        set<int> guessSet;
-        for (int guessID : guess[x])
-        {
-            guessSet.insert(guessID);
-        }
-        //Checks how many of the actual closest elements are in the guess set
-        for (int ansID : answer[x])
-        {
-            total++;
-            subtotal++;
-            if (guessSet.count(ansID))
-            {
-                correct++;
-                subcorrect++;
-            }
-        }
-        cout << "Trial " << x << " accuracy: " << subcorrect/subtotal << endl;
-    }
-    cout << "total: " << total << endl;
-    cout << "correct: " << correct << endl;
-    double percentage = correct / total;
-    return (percentage);
+// double computeRecall(vector<vector<int>> answer, vector<vector<int>> guess)
+// {
+//     //We assume that the size of the answer and guess vector are the same
+//     //We assume that the answer has no repeats and is full for each vector
+//     double total = 0;
+//     double correct = 0;
+//     for (size_t x = 0; x < answer.size(); x++)
+//     {
+//         double subtotal = 0;
+//         double subcorrect = 0;
+//         set<int> guessSet;
+//         for (int guessID : guess[x])
+//         {
+//             guessSet.insert(guessID);
+//         }
+//         //Checks how many of the actual closest elements are in the guess set
+//         for (int ansID : answer[x])
+//         {
+//             total++;
+//             subtotal++;
+//             if (guessSet.count(ansID))
+//             {
+//                 correct++;
+//                 subcorrect++;
+//             }
+//         }
+//         cout << "Trial " << x << " accuracy: " << subcorrect/subtotal << endl;
+//     }
+//     cout << "total: " << total << endl;
+//     cout << "correct: " << correct << endl;
+//     double percentage = correct / total;
+//     return (percentage);
+// }
+
+double RecallAtK(int* answer, int* guess, int k){
+    std::vector<int> tmp;
+    std::set_intersection(answer, answer+k,  // Input iterators for first range 
+                              guess, guess+k, // Input iterators for second range 
+                              std::back_inserter(tmp));
+    return (double(tmp.size())/double(k));
 }
+
 
 // vector<vector<int>> computeGroundTruth(vector<vector<int>> queryset, vector<set<string>> queryprops, vector<vector<int>> data, vector<set<string>> properties, int num_results)
 // {
@@ -171,6 +180,15 @@ vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, v
         pq.pop();
     }
     return topk;
+}
+
+// replace vectorization: avx 256/512
+float L2sq(float* a, float* b, size_t d){
+    float dist=0;
+    for(uint32_t k = 0; k < d; ++k) {                 
+        dist += pow(a[k] - b[k],2); 
+    } 
+    return dist;
 }
 
 // vector<int> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, uint32_t* idx, uint32_t idxSize, int num_results)

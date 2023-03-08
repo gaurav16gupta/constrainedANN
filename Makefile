@@ -28,6 +28,16 @@ preFilterIndex: clean_preFilterIndex
 							src/PreFilterIndex.cpp \
 	-o preFilterIndex $(LFLAGS)
 
+searchFilter: clean_searchFilter
+	$(CXX) $(INC) $(CFLAGS) src/readfile.cpp \
+							src/MurmurHash3.cpp \
+							src/cbloomfilter.cpp \
+							src/crambo.cpp \
+							src/bitArray.cpp \
+							src/utils.cpp \
+							src/searchFilter.cpp \
+	-o searchFilter $(LFLAGS)
+	
 query: query.cpp
 	$(CXX) $(INC) $(CFLAGS) query.cpp -o query $(LFLAGS)
 
@@ -35,6 +45,8 @@ clean_index:
 	rm -f index
 clean_preFilterIndex:
 	rm -f preFilterIndex
+clean_searchFilter:
+	rm -f searchFilter
 
 .PHONY: clean all
 

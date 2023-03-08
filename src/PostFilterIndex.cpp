@@ -52,14 +52,14 @@ PostFilterIndex::PostFilterIndex(vector<vector<int>> data, vector<set<string>> p
         learnset = data;
     }
     model.fit(learnset);
-    int* cluster_assignments = (int*) model.predict(data);
+    int* cluster_assignments = (int*) model.predict(data); // datapt -> clust ID
     Utils utility;
-    vector<int> sorted_order = utility.argsort(cluster_assignments, data.size());
+    vector<int> sorted_order = utility.argsort(cluster_assignments, data.size()); 
     data_ids = sorted_order;
     int64_t* sorted_cluster_assignments = new int64_t[data.size()];
     for (int x = 0; x < data.size(); x++)
     {
-        sorted_cluster_assignments[x] = cluster_assignments[sorted_order[x]];
+        sorted_cluster_assignments[x] = cluster_assignments[sorted_order[x]]; 
         this->dataset.push_back(data[sorted_order[x]]);
     }
     cluster_assignments = (int *)sorted_cluster_assignments;
@@ -100,7 +100,7 @@ vector<vector<int>> PostFilterIndex::split_clusters(vector<int> cluster_assignme
             }
         }
         int bound = low + (high - low) / 2;
-        cluster_bounds[cluster_id][1] = bound;
+        cluster_bounds[cluster_id][1] = bound; // |0-----|5----|9----------|------|
         cluster_bounds[cluster_id + 1][0] = bound;
     }
     return cluster_bounds;
