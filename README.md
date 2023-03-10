@@ -5,12 +5,16 @@ make index
 ```
 This will run FilterIndex.cpp
 
-Currently it has a bug and the outputs are not consistent.
-
 Install 
 1) Faiss
 2) OpenBLAS
+
 Provide path at INC and LFLAGS in Makefile
+
+
+Updates:
+- No bug in jointIndex (proposed method)
+- added code for SearchFilter and FilterSearch
 
 Todo: 
 - Benchmark RAMBO vs inverted index

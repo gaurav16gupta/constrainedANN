@@ -283,8 +283,8 @@ int main()
     cout << "filterIndex running..." << endl;
     size_t d, nb,nc, nq, num_results; 
     // float* xt = fvecs_read("../data/sift/sift/sift_learn.fvecs", &d, &nt); // not needed now
-    float* data = fvecs_read("../data/sift/sift/sift_base.fvecs", &d, &nb);
-    vector<vector<string>> properties = getproperties("../data/sift/sift_label/label_sift_base.txt",' ');
+    float* data = fvecs_read("data/sift/sift_base.fvecs", &d, &nb);
+    vector<vector<string>> properties = getproperties("data/sift/label_sift_base.txt",' ');
     cout<<properties.size()<<endl;
     cout << "Data files read" << endl;
     nc = 1000; // num clusters
@@ -298,9 +298,9 @@ int main()
     // }
     cout << "Indexed" << endl;
 
-    float* queryset = fvecs_read("../data/sift/sift/sift_query.fvecs", &d, &nq);
-    vector<vector<string>> queryprops = getproperties("../data/sift/sift_label/label_sift_query.txt",' ');
-    int* queryGTlabel = ivecs_read("../data/sift/sift/label_sift_hard_groundtruth.ivecs", &num_results, &nq);
+    float* queryset = fvecs_read("data/sift/sift_query.fvecs", &d, &nq);
+    vector<vector<string>> queryprops = getproperties("data/sift/label_sift_query.txt",' ');
+    int* queryGTlabel = ivecs_read("data/sift/label_sift_hard_groundtruth.ivecs", &num_results, &nq);
     cout << "Query files read..." << endl;
 
     nq = 1000;  //overwrite 
