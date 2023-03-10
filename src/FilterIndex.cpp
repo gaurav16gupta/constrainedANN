@@ -57,7 +57,7 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
         }
         sort(properties[i].begin(), properties[i].end());
     }
-    cout<<cnt<<" unique constrints"<<endl;
+    cout<<cnt<<" unique constraints"<<endl;
     // point ids against each cluster ID, flattened
 }
 //get  ClusterProperties and miniClusters
@@ -66,7 +66,7 @@ void FilterIndex::get_kmeans_index(string metric){
     centroids = new float[d*nc]; //provide random nc vectors
     cen_norms = new float[nc]{0};
     data_norms = new float[nb]{0};
-    bool load = 1; //use load =0 for first time run
+    bool load = 1; //use load =0 for first time run, then load =1
     if (load){
         FILE* f1 = fopen("centroids.bin", "r");
         fread(centroids, sizeof(float), nc*d, f1);       
@@ -204,14 +204,6 @@ void FilterIndex::query(float* queryset, int nq, vector<vector<string>> querypro
 //     return dist;
 // }
 
-float FilterIndex::L2(float* a, float* b, uint32_t id){
-    float dist=0;
-    for(uint32_t k = 0; k < d; ++k) {                 
-        dist += pow(a[k] - b[id*d +k],2); 
-    } 
-    return dist;
-}
-
 // get clusters (match_Cids), start from best and do filter then search, till you get topk
 void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum)
 {   
@@ -244,7 +236,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
             
             if (properties[Lookup[i]]== props){ //comparing two string vectors
                 seen++;
-                dist = L2(query, dataset, Lookup[i]);
+                dist = L2sq(query, dataset +Lookup[i]*d, d);
                 Candidates_pq.push({-dist, Lookup[i]});
             }
         }

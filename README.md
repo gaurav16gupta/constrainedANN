@@ -25,6 +25,7 @@ Updates:
 - added code for SearchFilter and FilterSearch
 
 Todo: 
+- Split index and query
 - Add arguments
 - Optimize FilterIndex
 - Benchmark RAMBO vs inverted index
