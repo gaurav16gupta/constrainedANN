@@ -300,6 +300,7 @@ void searchFilter::findNearestNeighbor(float* query, vector<string> Stprops, int
             cnt++;
         }
     }
+    // in this case probe NN again with higher m
     while(cnt<num_results){
         neighbor_set[qnum*num_results+ cnt] = -1;
         neighbor_dist[qnum*num_results+ cnt] = 0;

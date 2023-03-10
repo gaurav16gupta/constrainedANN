@@ -26,6 +26,7 @@ double computeRecall(vector<vector<int>> answer, vector<vector<int>> guess);
 vector<vector<int>> computeGroundTruth(vector<vector<int>> queryset, vector<set<string>> queryprops, vector<vector<int>> data, vector<set<string>> properties, int num_results);
 vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, vector<uint32_t> idx, uint32_t idxSize, uint32_t k, vector<float> topkDist);
 float L2sq(float* a, float* b, size_t d);
+double RecallAtK(int* answer, int* guess, size_t k, size_t nq);
 
 vector<int> argsort(int * query, int length);
 vector<int> vectorArgsort(vector<double> query);

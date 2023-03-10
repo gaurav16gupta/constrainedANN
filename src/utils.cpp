@@ -58,12 +58,28 @@ using namespace std;
 //     return (percentage);
 // }
 
-double RecallAtK(int* answer, int* guess, int k){
-    std::vector<int> tmp;
-    std::set_intersection(answer, answer+k,  // Input iterators for first range 
-                              guess, guess+k, // Input iterators for second range 
-                              std::back_inserter(tmp));
-    return (double(tmp.size())/double(k));
+double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
+    uint32_t count = 0;
+    for (int i=0;i<nq;i++){
+        sort(answer+ k*i, answer + (i+1)*k);
+        sort(guess+ k*i, guess+ (i+1)*k);
+        // for (int j=0; j<k; j++){
+        //     cout << answer[j+ k*i] << " ";
+        // }
+        // cout<<endl;
+        // for (int j=0; j<k; j++){
+        //     cout << guess[j+ k*i] << " ";
+        // }
+        // cout<<endl;
+        std::vector<int> tmp;
+        std::set_intersection(answer+ k*i, answer + (i+1)*k,  // Input iterators for first range 
+                            guess+ k*i, guess+ (i+1)*k, // Input iterators for second range 
+                            std::back_inserter(tmp));
+        count += double(tmp.size());
+        // cout<<double(tmp.size())<<endl;
+        // break;
+    }
+    return (count/double(nq*k));
 }
 
 
