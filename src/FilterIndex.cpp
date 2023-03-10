@@ -281,7 +281,7 @@ vector<uint32_t> FilterIndex::satisfyingIDs(vector<uint16_t> props)
 int main()
 {
     cout << "filterIndex running..." << endl;
-    size_t d, nb,nc, nq, num_results; 
+    size_t d, nb,nc, nq, num_results, buffer_size; 
     // float* xt = fvecs_read("../data/sift/sift/sift_learn.fvecs", &d, &nt); // not needed now
     float* data = fvecs_read("data/sift/sift_base.fvecs", &d, &nb);
     vector<vector<string>> properties = getproperties("data/sift/label_sift_base.txt",' ');
@@ -304,9 +304,10 @@ int main()
     cout << "Query files read..." << endl;
 
     nq = 1000;  //overwrite 
+    buffer_size = 2500;
     chrono::time_point<chrono::high_resolution_clock> t1, t2, t3;
     t1 = chrono::high_resolution_clock::now();
-    myFilterIndex.query(queryset, nq, queryprops, num_results, 2500);
+    myFilterIndex.query(queryset, nq, queryprops, num_results, buffer_size);
     t2 = chrono::high_resolution_clock::now();
     cout << "query per sec "<<(double)1000000*nq/(double)chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<endl;;
     int32_t* output = myFilterIndex.neighbor_set;
