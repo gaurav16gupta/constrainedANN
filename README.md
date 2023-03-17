@@ -15,10 +15,14 @@ Set parameters number of queries (nq) and number of distance computations (buffe
 Run
 ```
 make index
-./index
+./index 1024
 ```
-This will run FilterIndex.cpp
-
+./index num_clusters
+```
+make query
+./query 1024 1000 200
+```
+./query num_clusters number_of_queries buffer_size
 
 Updates:
 - No bug in FilterIndex (proposed method)
