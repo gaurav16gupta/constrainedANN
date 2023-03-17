@@ -198,12 +198,14 @@ vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, v
     return topk;
 }
 
-// replace vectorization: avx 256/512
-float L2sq(float* a, float* b, size_t d){
+// replace with SIMD: SSE/AVX 128/256
+float L2sim(float* a, float* b, float norm_bsq, size_t d){
     float dist=0;
-    for(uint32_t k = 0; k < d; ++k) {                 
-        dist += pow(a[k] - b[k],2); 
+    for(uint32_t k = 0; k < d; ++k) {    
+        dist += a[k]*b[k]; // one unit FLOP- mul
+        // dist += pow(a[k]-b[k],2); // two units FLOPS- mul and sub
     } 
+    dist= dist- norm_bsq;
     return dist;
 }
 
