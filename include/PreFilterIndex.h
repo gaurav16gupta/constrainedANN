@@ -15,7 +15,7 @@
 #include <algorithm>
 #include <string> 
 #include <cstdint>
-#include <unordered_map>
+#include <map>
 #include <chrono>
 
 #include <cstdio>
@@ -28,12 +28,14 @@ using namespace std;
 class PreFilterIndex
 {
     public:
-        PreFilterIndex(float* data, size_t d_, size_t nb_, size_t nq_, size_t k_, vector<vector<string>> properties);
-        vector<vector<uint32_t>> query(float* queryset, vector<vector<string>> queryprops, int num_results, int max_num_distances);
-        vector<uint32_t> findNearestNeighbor(float* query, vector<string> props, int num_results, int max_num_distances);
-        vector<uint32_t> satisfyingIDs(vector<string> props);
+        PreFilterIndex(vector<vector<int>> data, vector<set<string>> properties, double& invert_time, double& invert_pair_time);
+        vector<vector<int>> query(vector<vector<int>> queryset, vector<set<string>> queryprops, int num_results, int max_num_distances, double& filter_time, double& filter_pair_time, double& search_time);
+        vector<int> findNearestNeighbor(vector<int> query, set<string> props, int num_results, int max_num_distances, double& filter_time, double& filter_pair_time, double& search_time);
+        vector<int> satisfyingIDs(set<string> props);
+        vector<int> satisfyingPairIDs(set<string> props);
 
-        float* dataset; //use <dtype> array instead
-        uint32_t d, nb, nq, k;
-        unordered_map<string, vector<uint32_t>> inverted_index; //can use other efficient maps
+        
+        vector<vector<int>> dataset;
+        map<string, set<int>> inverted_index;
+        map<string, map<string, set<int>>> inverted_pair_index;
 };
