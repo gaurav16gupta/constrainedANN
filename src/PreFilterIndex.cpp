@@ -1,7 +1,15 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cstdlib>
 #include <vector>
+#include <set>
+#include <iterator>
+#include "MurmurHash3.h"
+#include "cbloomfilter.h"
+#include "crambo.h"
+// #include "cfilterindex.h"
+#include "readfile.h"
 #include <stdlib.h>     /* calloc, exit, free */
 #include <numeric>
 #include <algorithm>
@@ -9,167 +17,254 @@
 #include <cstdint>
 #include <map>
 #include <chrono>
-#include <cmath>
-#include <cstdio>
-#include <random>
-#include <sys/time.h>
 
-#include "cbloomfilter.h"
-#include "crambo.h"
+#include <cstdio>
+// #include <faiss>
+// #include "faiss/Clustering.h"
+// #include "faiss/Index.h"
+// #include "faiss/utils.h"
 #include "readfile.h"
 #include "utils.h"
-#include "PreFilterIndex.h"
+#include "PreFilterIndex2.h"
 //Use quotations for a .h file
 
+//include something for map
 using namespace std;
 
+//dataset is the set of data given
 //inverted_index is an inverted default dictionary of properties that maps properties to the IDs that have them
-PreFilterIndex::PreFilterIndex(float* data, size_t d_, size_t nb_, size_t nq_, size_t k_, vector<vector<string>> properties){
-    dataset = data;
-    d =d_;
-    nb = nb_;
-    nq = nq_;
-    k = k_;
-    for (int dataID = 0; dataID < properties.size(); dataID++){
-        for (string property : properties[dataID]){
-            inverted_index[property].push_back(dataID); //constraint:vectorNum
+PreFilterIndex::PreFilterIndex(vector<vector<int>> data, vector<set<string>> properties, double& invert_time, double& invert_pair_time)
+{
+    this->dataset = data;
+    auto start_train = std::chrono::high_resolution_clock::now();
+    for (int dataID = 0; dataID < properties.size(); dataID++)
+    {
+        for (string property : properties[dataID])
+        {
+            this->inverted_index[property].insert(dataID);
         }
     }
-    // Sort each vector in ascending order. 
-    for (auto v : inverted_index) {
-        std::sort(v.second.begin(), v.second.end());
+    auto stop_train = std::chrono::high_resolution_clock::now();
+    chrono::duration<double> time_took = stop_train - start_train;
+    invert_time += time_took.count();
+
+    auto start_train_pair = std::chrono::high_resolution_clock::now();
+    for (int dataID = 0; dataID < properties.size(); dataID++)
+    {
+        for (string property1 : properties[dataID])
+        {
+            for (string property2 : properties[dataID])
+            {
+                this->inverted_pair_index[property1][property2].insert(dataID);
+            }
+        }
     }
+    auto stop_train_pair = std::chrono::high_resolution_clock::now();
+    chrono::duration<double> time_took_pair = stop_train_pair - start_train_pair;
+    invert_pair_time += time_took_pair.count();
 }
 
-vector<vector<uint32_t>> PreFilterIndex::query(float* queryset, vector<vector<string>> queryprops, int num_results, int max_num_distances)
+vector<vector<int>> PreFilterIndex::query(vector<vector<int>> queryset, vector<set<string>> queryprops, int num_results, int max_num_distances, double& filter_time, double& filter_pair_time, double& search_time)
 {
-    //queryset is an array of queries (*float), queryprops: query properties
-    vector<vector<uint32_t>> neighbor_set;
-    // string s;
-    // cin>>s;
-    for (size_t i = 0; i < nq; i++){
-        cout<<i<<endl;
-        neighbor_set.push_back(findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances));
+    //queries are *int values of length len_query
+    //queryset is an array of queries (**int) and has a length of len_queryset
+    vector<vector<int>> neighbor_set;
+    for (int i = 0; i < queryset.size(); i++)
+    {
+        neighbor_set.push_back(findNearestNeighbor(queryset[i], queryprops[i], num_results, max_num_distances, filter_time, filter_pair_time, search_time));
     }
     return neighbor_set;
 }
 
-vector<uint32_t> PreFilterIndex::findNearestNeighbor(float* query, vector<string> props, int num_results, int max_num_distances)
+vector<int> PreFilterIndex::findNearestNeighbor(vector<int> query, set<string> props, int num_results, int max_num_distances, double& filter_time, double& filter_pair_time, double& search_time)
 {
-    // an intersection of all the IDs that have each property
-    // vector<int> match_ids = satisfyingIDs(props);
-    // for (string prop: props){
-    //     cout<<prop<<",";
-    // }
-    // cout<<endl; 
-    vector<float> topkDist;
-    vector<uint32_t> match_ids = satisfyingIDs(props);
+    //use stdvector instead of int** if you want=
+    //make a helper function to find all the match_ids
+    //essentially an intersection of all the IDs that have each property
+    // tuple<std::vector<int>, int> return_values = satisfyingIDs(props); //use the address instead of making a copy
+    // std::vector<int> match_ids = get<0>(return_values); //adjust satisfyingIDs appropriately
+    auto start_train = std::chrono::high_resolution_clock::now();
+    vector<int> match_ids = satisfyingIDs(props);
+    auto stop_train = std::chrono::high_resolution_clock::now();
+    chrono::duration<double> time_took = stop_train - start_train;
+    filter_time += time_took.count();
+
+    auto start_train_pair = std::chrono::high_resolution_clock::now();
+    vector<int> match_pair_ids = satisfyingPairIDs(props);
+    auto stop_train_pair = std::chrono::high_resolution_clock::now();
+    chrono::duration<double> time_took_pair = stop_train_pair - start_train_pair;
+    filter_pair_time += time_took_pair.count();
+    
     int len_match_ids = match_ids.size();
-    // int len_query = nq;
-    //if there is not a data with these properties
-    if (match_ids.empty()){
-        cout<<"no matching attributes"<<endl;
+    // int len_match_ids = get<1>(return_value);
+    if (match_ids.empty()) //if there is not a data with these properties
+    {
         return match_ids;
     }
-    //why cap it here?
-    // if (max_num_distances < len_match_ids) {
-    //     match_ids.resize(max_num_distances);
-    //     match_ids.shrink_to_fit();
-    //     len_match_ids = max_num_distances;
-    // }
-    if (len_match_ids <= num_results){
-        // cout<<"len_match_ids <= num_results"<<endl;
-        return match_ids;
+
+    if (max_num_distances < len_match_ids) //not null
+    {
+        match_ids.resize(max_num_distances);
+        match_ids.shrink_to_fit();
+        len_match_ids = max_num_distances;
     }
-    else{
-        return argTopK(query, dataset, d, nb, match_ids, len_match_ids, num_results, topkDist);
+
+    auto start_train2 = std::chrono::high_resolution_clock::now();
+    if (len_match_ids <= num_results)
+    {
+        vector<int> ans = match_ids;
+        auto stop_train2 = std::chrono::high_resolution_clock::now();
+	    chrono::duration<double> time_took2 = stop_train2 - start_train2;
+        search_time += time_took2.count();
+        return ans;
     }
+    else
+    {
+        Utils utility;
+        vector<int> ans = utility.argMatchTopK(query, dataset, num_results, match_ids);
+        auto stop_train2 = std::chrono::high_resolution_clock::now();
+	    chrono::duration<double> time_took2 = stop_train2 - start_train2;
+        search_time += time_took2.count();
+        return ans;
+    }
+    
 }
-// to be done by Jonah
-vector<uint32_t> PreFilterIndex::satisfyingIDs(vector<string> props)
+
+vector<int> PreFilterIndex::satisfyingIDs(set<string> props)
 {
     // Should take O(set size)
     //use uint16 or uint8 to reduce the size
-    vector<uint32_t> match_ids = inverted_index[props[0]];
-    // map<uint32_t, uint8_t> array_ids; // need to init every time
-    for (int i =1; i< props.size(); i++){ //loops over all properties
-        // vector<uint32_t> valid_ids = ;
-        std::vector<uint32_t> tmp;
-        std::set_intersection(match_ids.begin(), match_ids.end(),  // Input iterators for first range 
-                              inverted_index[props[i]].begin(), inverted_index[props[i]].end(), // Input iterators for second range 
-                              std::back_inserter(tmp));            // Output iterator
-
-        match_ids = tmp;   // Update the current result with the intersection of this iteration. 
-        if (match_ids.empty()) {   // If there is no intersection, we can stop here as any further intersections will be empty too. 
-            break;  
-        }    					
-
-        // for (uint32_t valid_id: match_ids){
-        //     cout<<valid_id<<",";
-        // }
-        // cout<<endl; 
-
-        // if (i< num_props-1){
-        //     for (uint32_t id : valid_ids){ //items of a given property
-        //         array_ids[id] += 1; // key: item, value: # properties it satisfies
-        //     }
-        // }
-        // else {
-        //     for (uint32_t id : valid_ids){
-        //         if (array_ids[id] == num_props-2)  match_ids.push_back(id); 
-        //     }
-        // }
+    map<int, int> array_ids; //Replaced with another unordered map which is a faster way to do it
+    int num_props = props.size();
+    for (string property : props)
+    {
+        set<int> valid_ids = inverted_index[property];
+        for (int id : valid_ids)
+        {
+            array_ids[id] += 1;
+        }
     }
-    
+    vector<int> match_ids;
+    for (auto pair : array_ids) //constant
+    {
+        //Not needed for single properties
+        //In multiple properties this is fine
+        if (pair.second >= num_props) //Make sense with multiple properties because intersection
+        {
+            match_ids.push_back(pair.first);
+        }
+    }
+    return match_ids;
+}
+
+vector<int> PreFilterIndex::satisfyingPairIDs(set<string> props)
+{
+    vector<string> vector_props;
+    set<int> valid_ids;
+    for (string property1 : props)
+    {
+        for (string property2 : props)
+        {
+            if (property1.compare(property2) != 0)
+            {
+                valid_ids = inverted_pair_index[property1][property2];
+            }
+        }
+    }
+    vector<int> match_ids;
+    for (int id : valid_ids)
+    {
+        match_ids.push_back(id);
+    }
     return match_ids;
 }
 
 int main()
 {
+    ofstream fout;
+    fout.open("./data/output_test.txt");
+    
     cout << "PreFilter running..." << endl;
+    ReadFile fileReader;
+    vector<vector<int>> data = fileReader.coordinates("./data/points_coords_file.txt");
+    vector<set<string>> properties = fileReader.properties("./data/point_properties_file.txt");
+    data.resize(10000);
+    data.shrink_to_fit();
+    properties.resize(10000);
+    properties.shrink_to_fit();
+    cout << "Data files read..." << endl;
 
-    size_t d2, nb,nq; 
-    // float* xt = fvecs_read("../data/sift/sift/sift_learn.fvecs", &d, &nt); // not needed now
-    float* data = fvecs_read("../data/sift/sift/sift_base.fvecs", &d2, &nb);
-    // for (int j=0;j<10;j++){
-    //     for (int i=0;i<128;i++){
-    //         cout<<data[i+j*128]<<' ';
-    //     }
-    //     cout<<endl;
-    // }
-    vector<vector<string>> properties = getproperties("../data/sift/sift_label/label_sift_base.txt",' ');
-    cout<<properties.size()<<endl;
-    cout << "Data files read" << endl;
-    PreFilterIndex prefilter(data, 128, 1000000, 4, 10, properties);
-    cout << "Indexed" << endl;
+    double invert_time = 0;
+    double invert_pair_time = 0;
+    PreFilterIndex prefilter(data, properties, invert_time, invert_pair_time);
+    cout << "Construction worked..." << endl;
+    cout << "Construction took: " << invert_time << " seconds" << endl;
+    fout << "Construction took: " << invert_time << " seconds" << endl;
+    cout << "Construction pairs took: " << invert_pair_time << " seconds" << endl;
+    fout << "Construction pairs took: " << invert_pair_time << " seconds" << endl;
 
-    float* queryset = fvecs_read("../data/sift/sift/sift_query.fvecs", &d2, &nq);
-    vector<vector<string>> queryprops = getproperties("../data/sift/sift_label/label_sift_query.txt",' ');
+
+    vector<vector<int>> queryset = fileReader.coordinates("./data/query_coords_file.txt");
+    vector<set<string>> queryprops = fileReader.properties("./data/query_properties_file.txt");
+    queryset.resize(1000);
+    queryset.shrink_to_fit();
+    queryprops.resize(1000);
+    queryprops.shrink_to_fit();
     cout << "Query files read..." << endl;
-    vector<vector<uint32_t>> query = prefilter.query(queryset, queryprops, 10, 300);
 
-    cout << "Querying worked..." << endl;
-    for (int coord : query[0]){
-        cout << coord << " ";
+    Utils utility;
+    cout << "utility passed" << endl;
+    for (int prop = 0; prop < 8; prop++)
+    {
+        for (int x = 0; x < queryprops.size(); x++)
+        {
+            set<string> prop_set;
+            prop_set.insert(to_string(prop));
+            queryprops[x] = prop_set;
+        }
+        cout << "up to ground truth" << endl;
+        vector<vector<int>> answer = utility.computeGroundTruth(queryset, queryprops, data, properties, 100);
+        
+        cout << "ground truth passed" << endl;
+        for (int num_distances = 1000; num_distances <= 10000; num_distances += 1000)
+        {
+            double filter_time = 0;
+            double filter_pair_time = 0;
+            double search_time = 0;
+            vector<vector<int>> query = prefilter.query(queryset, queryprops, 100, num_distances, filter_time, filter_pair_time, search_time);
+            
+            cout << "Querying worked for Prop: " << prop << " Distances: " << num_distances << endl;
+            
+            double accuracy = utility.computeRecall(answer, query);
+            cout << "Accuracy of: " << accuracy << endl;
+            fout << prop << "\t" << num_distances << "\t" << accuracy << "\t" << filter_time << "\t" << filter_pair_time << "\t" << search_time << endl;
+            if (accuracy == 1)
+            {
+                break;
+            }
+        }
     }
-    cout<<endl;
-    //load groundtruth
-    int* queryGT = ivecs_read("../data/sift/sift/label_sift_hard_groundtruth.ivecs", &d2, &nq);
-    for (int i; i<10; i++){
-        cout<<queryGT[i]<<" ";
-    }
 
+    // vector<vector<int>> query = prefilter.query(queryset, queryprops, 10, 5000);
+    // cout << "Querying worked..." << endl;
+    // cout << query.size() << endl;
+    // cout << query[1].size() << endl;
+    // cout << query[9].size() << endl;
+    // cout << query[5].size() << endl;
+    // for (int coord : query[4])
+    // {
+    //     cout << coord << endl;
+    // }
 
-    // vector<vector<int>> answer = computeGroundTruth(queryset, queryprops, data, properties, 10);// should be precomputed and stored
+    // vector<vector<int>> answer = utility.computeGroundTruth(queryset, queryprops, data, properties, 10);
     // cout << "Proper answer found..." << endl;
+    // cout << answer.size() << endl;
+    // cout << answer[1].size() << endl;
+    // cout << answer[9].size() << endl;
     // for (int coord : answer[4])
     // {
     //     cout << coord << endl;
     // }
-    // double accuracy = computeRecall(answer, query);
+    // double accuracy = utility.computeRecall(answer, query);
     // cout << "accuracy:" << accuracy << endl;
-
-     // vector<vector<int>> data = coordinates("./data/points_coords_file.txt");
-    // vector<vector<int>> queryset = coordinates("./data/query_coords_file.txt");
 }
-
