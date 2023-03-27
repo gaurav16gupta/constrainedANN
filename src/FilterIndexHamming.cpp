@@ -18,11 +18,11 @@
 #include "readfile.h"
 #include "utils.h"
 #include "FilterIndex.h"
-#include <faiss/Clustering.h>
+
+#include <faiss/Clustering.h> 
 #include <faiss/IndexFlat.h>
 #include <bits/stdc++.h>
 
-//include something for map
 using namespace std;
 using namespace faiss;
 
@@ -49,6 +49,7 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
     d =d_; // dim
     nb = nb_; //num data points
     nc = nc_; // num clusters
+    treelen = 4; //length of hamming tree, num miniclusters= treelen+1
 
     //transform properties to int
     properties.resize(nb);
@@ -63,17 +64,25 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
         }
         sort(properties[i].begin(), properties[i].end());
     }
-    cout<<cnt<<" unique constraints"<<endl;
-    // point ids against each cluster ID, flattened
+    cout<<cnt<<" unique constraints"<<endl; 
+    // Properties to attribute location map
+    int numAttr = properties[0].size();
+    for (int i=0; i<nb; i++){
+        for (int j=0; j<numAttr; j++){
+            PrpAtrMap[properties[i][j]] = j;
+        }
+    }
 }
-//get  ClusterProperties and miniClusters
+
+//NN index
+// TODO: have more partitioning methods. Include BLISS
 void FilterIndex::get_kmeans_index(string metric, string indexpath){
     centroids = new float[d*nc]; //provide random nc vectors
     cen_norms = new float[nc]{0};
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]{0};
-    //init: take uniform random points from the cluster
+    //init: Take uniform random points from the corpus. They will be used as kmeans initialization
     int v[nb];
     randomShuffle(v , 0, nb);
     Clustering clus(d, nc);
@@ -90,7 +99,7 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     IndexFlatL2 index(d);
     clus.train(nb, dataset, index);
     memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * d * nc);
-    cout<<"centroids size: "<<clus.centroids.size()<<endl; //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
+    cout<<"centroids size: "<<clus.centroids.size()<<endl; //centroids (nc * d)
     
     // if L2 get norms as well
     for(uint32_t j = 0; j < nc; ++j){ 
@@ -100,7 +109,6 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         } 
         cen_norms[j] = cen_norms[j]/2;
     }
-    //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
     for(uint32_t j = 0; j < nb; ++j){  
         for(uint32_t k = 0; k < d; ++k) {    
             data_norms[j]=0;             
@@ -108,16 +116,13 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         } 
         data_norms[j]=data_norms[j]/2;
     }
-    //observation: clusters are not balanced if not initiliased with random vectors
-
+    //observation: clusters are not balanced if not initiliased with random vectors from the corpus
     uint32_t* invLookup = new uint32_t[nb];
-    // Lookup= new uint32_t[nb];
-    // counts = new uint32_t[nc+1]{0};
     // this needs to be integrated in clustering, use openmp, use Strassen algorithm for matmul*
     //get best score cluster
     #pragma omp parallel for  
     for(uint32_t i = 0; i < nb; ++i) {  
-        float bin, minscore, temp;
+        float bin, minscore, temp;// per thread local variables
         minscore = 1000000;      
         for(uint32_t j = 0; j < nc; ++j){  
             temp =0;
@@ -130,13 +135,10 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         }
         invLookup[i] = bin;    
     }
-    // for(int i = 0; i < 10; ++i) {  
-    //     cout<<invLookup[i]<<" ";
-    // }
     for(uint32_t i = 0; i < nb; ++i) {
         counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
     }
-    for(uint32_t j = 1; j < nc; ++j) {
+    for(uint32_t j = 1; j < nc+1; ++j) {
         counts[j] = counts[j]+ counts[j-1]; //cumsum 
     }
     
@@ -161,11 +163,81 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     get_cluster_propertiesIndex();
     // rank items in bins by distance
 }   
+//checks if the property x is seen before in maxMC
+bool FilterIndex::not_in(uint16_t x, uint16_t* a, int h){
+    // attribute number, property, frequency
+    if (h == 0){
+        return 1;
+    } 
+    else{
+        for(uint16_t i=0;i< h;i++){ 
+            if (a[i*3+1]==x){return 0;}
+        };
+        return 1;
+    }
+}
 
+//get most seen constraint
+// exclude and get most seen next constraint
+void FilterIndex::get_mc_propertiesIndex(){
+    vector<vector<uint32_t>> maxMCIDs; //nested array to store the mini-clusters
+    maxMCIDs.resize((treelen+1)*nc);
+    maxMC = new uint16_t[(treelen+1)*nc]; 
+    counts[nc]=1000000; // To remove this later
+    for (int clID = 0; clID < nc; clID++){
+        if (counts[clID+1]- counts[clID]==0) continue;
+        // get count of vector properties        
+        //get the max
+        for (int h=0; h<treelen; h++){
+            unordered_map<uint16_t, int> freq;
+            for (int i =counts[clID]; i< counts[clID+1]; i++){
+                for (uint16_t x: properties[Lookup[i]]) {
+                    if(not_in(x, maxMC + (treelen+1)*clID, h )) freq[x]++;
+                }
+            }
+            //choose property with max count
+            auto maxElement = max_element(freq.begin(), freq.end(),
+                [](const pair<uint16_t, int>& p1, const pair<uint16_t, int>& p2) { return p1.second < p2.second;}
+            );
+            maxMC[(treelen+1)*clID+h+0]= PrpAtrMap[maxElement->first];
+            maxMC[(treelen+1)*clID+h+1]= maxElement->first;
+            maxMC[(treelen+1)*clID+h+2]= maxElement->second;
+            // maxMC.push_back(make_pair(PrpAtrMap[maxElement->first], *maxElement));
+        }
+        
+        //maxMC serves as a node list and node data size in hamming tree, where
+        //node: property from maxMC
+        //node data: corresponding vector IDs
+        for (int i =counts[clID]; i< counts[clID+1]; i++){
+            for (int j=0; j< treelen; j++){
+                // if(properties[Lookup[i]][maxMC[j].first]==maxMC[j].second.first){
+                if(properties[Lookup[i]][maxMC[(treelen+1)*clID+j]]==maxMC[(treelen+1)*clID+j+1]){ 
+                    maxMCIDs[j + (treelen+1)*clID].push_back(Lookup[i]);
+                    goto m_label;
+                }
+            }
+            maxMCIDs[treelen+ (treelen+1)*clID].push_back(Lookup[i]);
+            m_label:;
+        } 
+    }
+    //update Lookup, counts. Flatten the maxMCIDs into Lookup
+    //each cluster now spans treelen+1 buckets
+    Lookup= new uint32_t[nb];
+    counts = new uint32_t[nc*(treelen+1)+1]{0}; 
+    for (int clID = 0; clID < nc; clID++){
+        for (int j=0; j< treelen+1; j++){
+            int id = clID*(treelen+1) +j;
+            counts[id+1] = counts[id]+ maxMCIDs[id].size();
+            memcpy(Lookup+ counts[id], maxMCIDs[id].data(), sizeof(*Lookup) * maxMCIDs[id].size());
+        }
+    }
+}
+//      check for logical errors
+//      hamming tree partitons maynot be balanced. Can we balance them?
 void FilterIndex::get_cluster_propertiesIndex(){
     ClusterProperties.resize(nc);
     for (int clID = 0; clID < nc; clID++){
-        //only if atleast one eelment in cluster
+        //only if atleast one element in cluster
         if (counts[clID+1]- counts[clID]==0) continue;
         ClusterProperties[clID] = properties[Lookup[counts[clID]]];
         for (int i =counts[clID]+1; i< counts[clID+1]; i++){
@@ -207,12 +279,15 @@ void FilterIndex::loadIndex(string indexpath){
     // reorder data
     dataset_reordered = new float[nb*d];
     data_norms_reordered = new float[nb];
+    properties_reordered.resize(nb);
     for(uint32_t i = 0; i < nb; ++i) {
         copy(dataset+Lookup[i]*d, dataset+(Lookup[i]+1)*d , dataset_reordered+i*d);
         data_norms_reordered[i] = data_norms[Lookup[i]];
+        properties_reordered[i] = properties[Lookup[i]];
     }
     delete dataset;
-    get_cluster_propertiesIndex();
+    // get_cluster_propertiesIndex();
+    get_mc_propertiesIndex();
 }
 
 void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances){
@@ -227,7 +302,7 @@ void FilterIndex::query(float* queryset, int nq, vector<vector<string>> querypro
     }
 }
 
-// get clusters (match_Cids), start from best and do filter then search, till you get topk
+// start from best custer and do filter then search, till you get topk
 void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum)
 {   
     // chrono::time_point<chrono::high_resolution_clock> t1, t2, t3, t4, t5, t6;
@@ -238,18 +313,13 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         props.push_back(prLook[stprp]);
     }
     sort(props.begin(), props.end());
-    // t2 = chrono::high_resolution_clock::now();
-    vector<uint32_t> match_Cids = satisfyingIDs(props); // compare property match and cluster distance computations times. Which is bigger??
-    //rank match_Cids
-    // t3 = chrono::high_resolution_clock::now();
+
     priority_queue<pair<float, uint32_t> > pq;
     float sim;
-    for (uint32_t id: match_Cids){
-        // sim = L2sim(query, centroids+id*d, cen_norms[id], d);
-        sim= L2SqrSIMD16ExtAVX(query, centroids+id*d, cen_norms[id], d);
+    for (uint32_t id=0; id<nc; id++){
+        sim = L2SqrSIMD16ExtAVX(query, centroids+id*d, cen_norms[id], d);
         pq.push({sim, id});//max heap
     }
-    // t4 = chrono::high_resolution_clock::now();
     // for each id in pq
     // filter then search bruteforce
     priority_queue<pair<float, uint32_t> > Candidates_pq;
@@ -259,36 +329,28 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         uint32_t bin = pq.top().second;
         pq.pop();
         seenbin++;
+        bin = bin*(treelen+1);
+        //get which disjoint part of the cluster query belongs to
+        uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
+        bin = bin+membership;
+
         for (int i =counts[bin]; i< counts[bin+1]; i++){
             //check if constraint statisfies
-            //what if an attribute is not present in the corpus- return empty set
             int j =0;
-            while (j<props.size() && properties[Lookup[i]][j]== props[j]) j++;
+            while (j<props.size() && properties_reordered[i][j]== props[j]) j++;
             if (j==props.size()){
                 seen++;
-                sim = L2sim(query, dataset_reordered +i*d, data_norms_reordered[i], d);
+                sim = L2SqrSIMD16ExtAVX(query, dataset_reordered +i*d, data_norms_reordered[i], d);
                 Candidates_pq.push({sim, Lookup[i]});
             }
-            // if (properties[Lookup[i]]== props){ //comparing two vectors fully is slow
-            //     seen++;
-            //     dist = L2sq(query, dataset +Lookup[i]*d, d);
-            //     Candidates_pq.push({-dist, Lookup[i]});
-            // }
         }
     }
-    // cout<<seen<<endl;
-    // t5 = chrono::high_resolution_clock::now();
     for (int i =0; i< min(seen,num_results); i++){ 
         neighbor_set[qnum*num_results+ i] = Candidates_pq.top().second;
         Candidates_pq.pop();
     }
-    // t6 = chrono::high_resolution_clock::now();
-    // cout<<"1 "<<chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<" ";
-    // cout<<"2 "<<chrono::duration_cast<chrono::microseconds>(t3 - t2).count()<<" ";
-    // cout<<"3 "<<chrono::duration_cast<chrono::microseconds>(t4 - t3).count()<<" ";
-    // cout<<"4 "<<chrono::duration_cast<chrono::microseconds>(t5 - t4).count()<<" ";
-    // cout<<"5 "<<chrono::duration_cast<chrono::microseconds>(t6 - t5).count()<<" ";
-    // cout<<endl;
+    // t2 = chrono::high_resolution_clock::now();
+    // cout<<"time: "<<chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<" ";
 }
 
 vector<uint32_t> FilterIndex::satisfyingIDs(vector<uint16_t> props)
@@ -310,47 +372,3 @@ vector<uint32_t> FilterIndex::satisfyingIDs(vector<uint16_t> props)
     }
     return match_ids;
 }
-
-// int main(int argc, char** argv)
-// {
-//     if (argc != 3){
-//         std::cout << argv[0] << " number_of_queries buffer_size"<< std::endl;
-//         exit(-1);
-//     }
-
-//     cout << "filterIndex running..." << endl;
-//     size_t d, nb,nc, nq, num_results, buffer_size; 
-//     // float* xt = fvecs_read("../data/sift/sift/sift_learn.fvecs", &d, &nt); // not needed now
-//     float* data = fvecs_read("../data/sift/sift/sift_base.fvecs", &d, &nb);
-//     vector<vector<string>> properties = getproperties("../data/sift/sift_label/label_sift_base_3.txt",' ');
-//     cout<<properties.size()<<endl;
-//     cout << "Data files read" << endl;
-//     nc = 1000; // num clusters
-//     FilterIndex myFilterIndex(data, d, nb, nc, properties);
-//     string metric="L2";
-//     myFilterIndex.get_kmeans_index(metric);
-//     myFilterIndex.get_cluster_propertiesIndex();
-
-//     cout << "Indexed" << endl;
-//     float* queryset = fvecs_read("../data/sift/sift/sift_query.fvecs", &d, &nq);
-//     vector<vector<string>> queryprops = getproperties("../data/sift/sift_label/label_sift_query_3.txt",' ');
-//     int* queryGTlabel = ivecs_read("../data/sift/sift/label_sift_3_hard_groundtruth.ivecs", &num_results, &nq);
-//     cout << "Query files read..." << endl;
-
-//     nq = atoi(argv[1]);
-//     buffer_size = atoi(argv[2]);
-//     chrono::time_point<chrono::high_resolution_clock> t1, t2;
-//     t1 = chrono::high_resolution_clock::now();
-//     myFilterIndex.query(queryset, nq, queryprops, num_results, buffer_size);
-//     t2 = chrono::high_resolution_clock::now();
-//     cout << "query per sec "<<(double)1000000*nq/(double)chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<endl;;
-//     int32_t* output = myFilterIndex.neighbor_set;
-//     int output_[num_results*nq];
-//     copy(output, output+num_results*nq , output_);
-    
-//     //recall
-//     double recall = RecallAtK(queryGTlabel, output_, num_results, nq);
-//     cout<<"Recall10@10: "<<recall<<endl;
-// }
-
-//*https://github.com/vaibhawvipul/performance-engineering/blob/main/matrix_multiplication/matrix_strassen_looporder_omp.cpp

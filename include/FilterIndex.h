@@ -36,6 +36,10 @@ class FilterIndex
         void query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int num_mini_probes);
         void findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum);
         vector<uint32_t> satisfyingIDs(vector<uint16_t> props);
+        void get_mc_propertiesIndex();
+        // bool not_in(uint16_t x, vector<pair<uint16_t, pair<uint16_t, int>>> &maxMC);
+        bool not_in(uint16_t x, uint16_t* a, int h);
+
 
         float *dataset; //use <dtype> array instead
         float *dataset_reordered;
@@ -47,9 +51,15 @@ class FilterIndex
         uint32_t* Lookup; 
         uint32_t* counts;
         int32_t* neighbor_set;
-
+        int treelen;
+        
+        unordered_map<uint16_t, uint16_t>PrpAtrMap;
         vector<vector<uint16_t>>properties;
+        vector<vector<uint16_t>>properties_reordered;
         vector<vector<uint16_t>> ClusterProperties;//properties of each cluster
+        // vector<pair<uint16_t, pair<uint16_t, int>>> maxMC;
+        uint16_t* maxMC;
+
         uint32_t d, nb, nc, k;
         unordered_map<uint16_t, vector<uint32_t>> inverted_index; //can use other efficient maps
         unordered_map<string, uint16_t> prLook; 

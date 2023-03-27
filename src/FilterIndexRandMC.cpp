@@ -18,6 +18,7 @@
 #include "readfile.h"
 #include "utils.h"
 #include "FilterIndex.h"
+
 #include <faiss/Clustering.h>
 #include <faiss/IndexFlat.h>
 #include <bits/stdc++.h>
@@ -162,6 +163,11 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     // rank items in bins by distance
 }   
 
+void FilterIndex::get_mc_propertiesIndex(){
+    
+}
+
+
 void FilterIndex::get_cluster_propertiesIndex(){
     ClusterProperties.resize(nc);
     for (int clID = 0; clID < nc; clID++){
@@ -245,8 +251,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     priority_queue<pair<float, uint32_t> > pq;
     float sim;
     for (uint32_t id: match_Cids){
-        // sim = L2sim(query, centroids+id*d, cen_norms[id], d);
-        sim= L2SqrSIMD16ExtAVX(query, centroids+id*d, cen_norms[id], d);
+        sim = L2sim(query, centroids+id*d, cen_norms[id], d);
         pq.push({sim, id});//max heap
     }
     // t4 = chrono::high_resolution_clock::now();

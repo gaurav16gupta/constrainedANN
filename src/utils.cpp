@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -19,44 +20,9 @@
 #include <cstdio>
 #include "utils.h"
 #include <bits/stdc++.h>
-//Use quotations for a .h file
 
-//include something for map
+
 using namespace std;
-
-// double computeRecall(vector<vector<int>> answer, vector<vector<int>> guess)
-// {
-//     //We assume that the size of the answer and guess vector are the same
-//     //We assume that the answer has no repeats and is full for each vector
-//     double total = 0;
-//     double correct = 0;
-//     for (size_t x = 0; x < answer.size(); x++)
-//     {
-//         double subtotal = 0;
-//         double subcorrect = 0;
-//         set<int> guessSet;
-//         for (int guessID : guess[x])
-//         {
-//             guessSet.insert(guessID);
-//         }
-//         //Checks how many of the actual closest elements are in the guess set
-//         for (int ansID : answer[x])
-//         {
-//             total++;
-//             subtotal++;
-//             if (guessSet.count(ansID))
-//             {
-//                 correct++;
-//                 subcorrect++;
-//             }
-//         }
-//         cout << "Trial " << x << " accuracy: " << subcorrect/subtotal << endl;
-//     }
-//     cout << "total: " << total << endl;
-//     cout << "correct: " << correct << endl;
-//     double percentage = correct / total;
-//     return (percentage);
-// }
 
 double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
     uint32_t count = 0;
@@ -198,7 +164,6 @@ vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, v
     return topk;
 }
 
-// replace with SIMD: SSE/AVX 128/256
 float L2sim(float* a, float* b, float norm_bsq, size_t d){
     float dist=0;
     for(uint32_t k = 0; k < d; ++k) {    
@@ -209,39 +174,43 @@ float L2sim(float* a, float* b, float norm_bsq, size_t d){
     return dist;
 }
 
-// vector<int> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, uint32_t* idx, uint32_t idxSize, int num_results)
-// {
-//     vector<tuple<int, double>> top_k;
-//     for (int x = 0; x < num_results; x ++)
-//     {
-//         top_k.push_back({x, -1.0});
-//     }
-//     for (int index = 0; index < coords.size(); index++)
-//     {
-//         double dist = 0;
-//         int id = index;
-//         for (int coord = 0; coord < query.size(); coord++)
-//         {
-//             dist += pow(coords[id][coord] - query[coord], 2);
-//         }
-//         dist = pow(dist, 0.5); 
-//         for (int order = 0; order < num_results; order++)
-//         {
-//             if (dist < get<1>(top_k.at(order)) || get<1>(top_k.at(order)) < 0)
-//             {
-//                 top_k.insert(top_k.begin() + order, {id, dist});
-//                 top_k.pop_back();
-//                 break;
-//             }
-//         }
-//     }
-//     vector<int> nearest_neighbors;
-//     for (int index = 0; index < num_results; index++)
-//     {
-//         nearest_neighbors.push_back(get<0>(top_k.at(index)));
-//     }
-//     return nearest_neighbors;
-// }
+// Not giving speedup!! Check the issue
+float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
+    float PORTABLE_ALIGN32 TmpRes[8];
+
+    // __m256 sum256 = _mm256_set1_ps(0);
+    // for(uint32_t k = 0; k < 32; ++k) {   
+    //     __m256 dot1 = _mm256_mul_ps(_mm256_loadu_ps(pVect1), _mm256_loadu_ps(pVect2));
+    //     pVect1 += 8;
+    //     pVect2 += 8;
+    //     sum256 = _mm256_add_ps(dot1, sum256); 
+    // }
+
+    size_t qty16 = qty / 16;
+    const float *pEnd1 = pVect1 + 16 * qty16;
+    __m256 sum256 = _mm256_set1_ps(0);
+    while (pVect1 < pEnd1) {
+        //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
+        const __m256 v1 = _mm256_loadu_ps(pVect1);
+        pVect1 += 8;
+        const __m256 v2 = _mm256_loadu_ps(pVect2);
+        pVect2 += 8;
+        sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
+    }
+    _mm256_store_ps(TmpRes, sum256);
+    float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] - norm_bsq;
+    return sum;
+}
+
+uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen){
+    // maxMC: attribute number, property, frequency
+    for (uint16_t i=0;i<treelen; i++){
+        if (maxMC[i*3+1] == props[maxMC[i*3+0]]){
+            return i;
+        }
+    }
+    return treelen+1;    
+}
 
 vector<int> argsort(int * query, int length)
 {
