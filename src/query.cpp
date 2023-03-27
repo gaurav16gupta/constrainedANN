@@ -30,7 +30,6 @@ int main(int argc, char** argv)
     vector<vector<string>> properties = getproperties(Attripath,' ');
     nc = atoi(argv[2]); // num clusters
     FilterIndex myFilterIndex(data, d, nb, nc, properties);
-    cout<<"here0"<<endl;
     myFilterIndex.loadIndex(indexpath);
     cout << "Loaded" << endl;
 
@@ -49,7 +48,7 @@ int main(int argc, char** argv)
     int32_t* output = myFilterIndex.neighbor_set;
     int output_[num_results*nq];
     copy(output, output+num_results*nq , output_);
-    cout<<"numClusters, buffersize, QPS, Recall10@10 :"<<endl;
+    cout<<"numClusters, buffersize, QPS, Recall100@100 :"<<endl;
     //QPS and recall
     double QPS;
     double recall = RecallAtK(queryGTlabel, output_, num_results, nq);

@@ -203,13 +203,27 @@ float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty
 }
 
 uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen){
-    // maxMC: attribute number, property, frequency
+    // maxMC: property location, property, frequency
     for (uint16_t i=0;i<treelen; i++){
         if (maxMC[i*3+1] == props[maxMC[i*3+0]]){
             return i;
         }
     }
     return treelen+1;    
+}
+
+//checks if the property x is seen before in maxMC
+bool not_in(uint16_t x, uint16_t* a, int h){
+    // property location, property, frequency
+    if (h == 0){
+        return 1;
+    } 
+    else{
+        for(uint16_t i=0;i< h;i++){ 
+            if (a[i*3+1]==x){return 0;}
+        };
+        return 1;
+    }
 }
 
 vector<int> argsort(int * query, int length)

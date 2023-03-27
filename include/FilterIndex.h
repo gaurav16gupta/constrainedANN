@@ -38,8 +38,6 @@ class FilterIndex
         vector<uint32_t> satisfyingIDs(vector<uint16_t> props);
         void get_mc_propertiesIndex();
         // bool not_in(uint16_t x, vector<pair<uint16_t, pair<uint16_t, int>>> &maxMC);
-        bool not_in(uint16_t x, uint16_t* a, int h);
-
 
         float *dataset; //use <dtype> array instead
         float *dataset_reordered;

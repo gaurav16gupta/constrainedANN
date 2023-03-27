@@ -40,6 +40,7 @@ vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, v
 float L2sim(float* a, float* b, float norm_bsq, size_t d);
 float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty);
 uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen);
+bool not_in(uint16_t x, uint16_t* a, int h);
 
 double RecallAtK(int* answer, int* guess, size_t k, size_t nq);
 
