@@ -9,8 +9,7 @@ Provide path at INC and LFLAGS in Makefile
 Get Data:
 
 - Download from https://rice-my.sharepoint.com/:f:/g/personal/gg29_rice_edu/EhiOVoan9FhJl9eB3BMqpukBcIrSQAXvUY31UrTHDUVGWg?e=jKtKPR
-
-Set parameters number of queries (nq) and number of distance computations (buffer_size) in FilterIndex.cpp main
+- Run data/sift/generateRandomTokens.py then data/sift/getGT-filterSearch.py, each time changing the sentence length of attributes to generate the synthetic attributes and groundtruth.
 
 Run
 ```
