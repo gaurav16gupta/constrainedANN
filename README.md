@@ -15,23 +15,21 @@ Set parameters number of queries (nq) and number of distance computations (buffe
 Run
 ```
 make index
-./index 1024
+./index <dataname> <num_clusters> <attribute sentence size>
+./index sift 1024 3
 ```
-./index num_clusters
 ```
 make query
-./query 1024 1000 200
-```
-./query num_clusters number_of_queries buffer_size
+./query <dataname> <num_clusters> <attribute sentence size> <buffer size>
 
-Updates:
-- No bug in FilterIndex (proposed method)
-- added code for SearchFilter and FilterSearch
+./query sift 1024 3 200
+```
+
 
 Todo: 
-- Split index and query
-- Add arguments
-- Optimize FilterIndex
-- Benchmark RAMBO vs inverted index
+- Fix AVX
+- Optimize FilterIndexHamming
+- Parameter optimization. Number of clusters, Tree height, number of splits, balancing etc.
+- Fins issue in large attribute sentence length
 - Joint attributes: Combine attributes, just like we do in byte-pair encoding vocab generation. Do for inverted index.
 - Benchmark RAMBO vs inverted index on Joint attributes

@@ -11,7 +11,7 @@ LFLAGS=./../faiss/build/faiss/libfaiss.a /home/gg29/OpenBLAS/libopenblas.a -lpth
 index: clean_index
 	$(CXX) $(INC) $(CFLAGS) src/readfile.cpp \
 							src/utils.cpp \
-							src/FilterIndexHamming.cpp \
+							src/FilterIndex.cpp \
 							src/index.cpp \
 	-o index $(LFLAGS)
 
