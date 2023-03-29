@@ -61,7 +61,7 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
             }
             properties[i].push_back(prLook[prp]);
         }
-        sort(properties[i].begin(), properties[i].end());
+        sort(properties[i].begin(), properties[i].end()); // beware:: sorting the properties will loose the position information!!
     }
     cout<<cnt<<" unique constraints"<<endl;
     // point ids against each cluster ID, flattened
@@ -136,7 +136,7 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     for(uint32_t i = 0; i < nb; ++i) {
         counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
     }
-    for(uint32_t j = 1; j < nc; ++j) {
+    for(uint32_t j = 1; j < nc+1; ++j) {
         counts[j] = counts[j]+ counts[j-1]; //cumsum 
     }
     
@@ -311,46 +311,3 @@ vector<uint32_t> FilterIndex::satisfyingIDs(vector<uint16_t> props)
     return match_ids;
 }
 
-// int main(int argc, char** argv)
-// {
-//     if (argc != 3){
-//         std::cout << argv[0] << " number_of_queries buffer_size"<< std::endl;
-//         exit(-1);
-//     }
-
-//     cout << "filterIndex running..." << endl;
-//     size_t d, nb,nc, nq, num_results, buffer_size; 
-//     // float* xt = fvecs_read("../data/sift/sift/sift_learn.fvecs", &d, &nt); // not needed now
-//     float* data = fvecs_read("../data/sift/sift/sift_base.fvecs", &d, &nb);
-//     vector<vector<string>> properties = getproperties("../data/sift/sift_label/label_sift_base_3.txt",' ');
-//     cout<<properties.size()<<endl;
-//     cout << "Data files read" << endl;
-//     nc = 1000; // num clusters
-//     FilterIndex myFilterIndex(data, d, nb, nc, properties);
-//     string metric="L2";
-//     myFilterIndex.get_kmeans_index(metric);
-//     myFilterIndex.get_cluster_propertiesIndex();
-
-//     cout << "Indexed" << endl;
-//     float* queryset = fvecs_read("../data/sift/sift/sift_query.fvecs", &d, &nq);
-//     vector<vector<string>> queryprops = getproperties("../data/sift/sift_label/label_sift_query_3.txt",' ');
-//     int* queryGTlabel = ivecs_read("../data/sift/sift/label_sift_3_hard_groundtruth.ivecs", &num_results, &nq);
-//     cout << "Query files read..." << endl;
-
-//     nq = atoi(argv[1]);
-//     buffer_size = atoi(argv[2]);
-//     chrono::time_point<chrono::high_resolution_clock> t1, t2;
-//     t1 = chrono::high_resolution_clock::now();
-//     myFilterIndex.query(queryset, nq, queryprops, num_results, buffer_size);
-//     t2 = chrono::high_resolution_clock::now();
-//     cout << "query per sec "<<(double)1000000*nq/(double)chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<endl;;
-//     int32_t* output = myFilterIndex.neighbor_set;
-//     int output_[num_results*nq];
-//     copy(output, output+num_results*nq , output_);
-    
-//     //recall
-//     double recall = RecallAtK(queryGTlabel, output_, num_results, nq);
-//     cout<<"Recall10@10: "<<recall<<endl;
-// }
-
-//*https://github.com/vaibhawvipul/performance-engineering/blob/main/matrix_multiplication/matrix_strassen_looporder_omp.cpp
