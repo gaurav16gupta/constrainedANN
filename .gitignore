@@ -5,3 +5,4 @@ faiss-tool/
 index
 preFilterIndex
 libfaiss.so
+sift*/

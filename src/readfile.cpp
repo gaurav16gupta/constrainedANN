@@ -80,6 +80,26 @@ vector<vector<int>> coordinates(string fileName)
     return coordinates;    
 }
 
+//write nested vector
+// void vectorWrite(const char* fname, vector<vector<uint16_t>> vec) {
+//     for (int i=0; i<vec.size(), i++){
+//         uint16_t d= vec[i].size();
+
+//         for (const auto& element: vec) { 
+//         file << element << " "; 
+//     } 
+//     }
+//     FILE* f1 = fopen("centroids.bin", "w");
+// fwrite(centroids, sizeof(float), nc*d, f1);
+
+// }
+
+
+//write dict unordered_map
+// void mapWrite(const char* fname, unordered_map<uint16_t, vector<uint32_t>> inverted_index) {
+
+// }
+
 
 /*****************************************************
  * I/O functions for fvecs and ivecs
