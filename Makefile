@@ -1,11 +1,7 @@
-# How to use 
-# To make tests: make tests 
-# To make all experiment binaries: make binaries
 
 CXX=g++
-CFLAGS = -std=gnu++11 -lgfortran -Wall -O3 -w -mavx
+CFLAGS = -std=gnu++17 -lgfortran -Wall -O3 -w -mavx
 INC=-I ./../faiss -I include/
-# LFLAGS=./../faiss/build/faiss/libfaiss.so /home/gg29/.conda/envs/graphSage/lib/libgomp.so -lpthread ./faiss/tools/lib/libopenblas.a -lpthread ./faiss/tools/lib/lib/libopenblas.a -lpthread -lm -ldl -lgfortran
 LFLAGS=./../faiss/build/faiss/libfaiss.a /home/gg29/OpenBLAS/libopenblas.a -lpthread -lm -ldl -lgfortran -fopenmp
 
 index: clean_index

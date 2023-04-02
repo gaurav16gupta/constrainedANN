@@ -1,15 +1,8 @@
 #include <iostream>
-#include <fstream>
 #include <vector>
-#include <stdlib.h>     /* calloc, exit, free */
-#include <numeric>
 #include <algorithm>
 #include <string> 
-#include <cstdint>
 #include <map>
-#include <chrono>
-#include <cmath>
-#include <cstdio>
 #include <random>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -18,21 +11,12 @@
 #include "readfile.h"
 #include "utils.h"
 #include "FilterIndex.h"
-#include <faiss/Clustering.h>
+#include <faiss/Clustering.h> 
 #include <faiss/IndexFlat.h>
 #include <bits/stdc++.h>
 
-//include something for map
 using namespace std;
 using namespace faiss;
-
-// #ifdef _DEBUG
-// #define initclock(stuff) std::cout << (stuff);
-// #define markclock(stuff) std::cout << (stuff);
-
-// #else
-// #define PRINTSTUFF(stuff)
-// #endif
 
 template <typename S>
 // to print vectors
@@ -50,7 +34,6 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
     nb = nb_; //num data points
     nc = nc_; // num clusters
 
-    //transform properties to int
     properties.resize(nb);
     uint16_t cnt=0;
     for (int i=0; i<nb; i++){

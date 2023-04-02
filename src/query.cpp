@@ -37,13 +37,15 @@ int main(int argc, char** argv)
     vector<vector<string>> queryprops = getproperties(queryAttripath,' ');
     int* queryGTlabel = ivecs_read(GTpath.c_str(), &num_results, &nq);
     cout << "Query files read..." << endl;
-    nq = 1000;
+    nq = 10000;
     buffer_size = atoi(argv[4]);
 
     chrono::time_point<chrono::high_resolution_clock> t1, t2;
     t1 = chrono::high_resolution_clock::now();
     myFilterIndex.query(queryset, nq, queryprops, num_results, buffer_size);
     t2 = chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = t2 - t1;
+
 
     int32_t* output = myFilterIndex.neighbor_set;
     int output_[num_results*nq];
@@ -52,5 +54,5 @@ int main(int argc, char** argv)
     //QPS and recall
     double QPS;
     double recall = RecallAtK(queryGTlabel, output_, num_results, nq);
-    printf("%d,%d,%f,%f\n",nc, buffer_size, (double)1000000*nq/(double)chrono::duration_cast<chrono::microseconds>(t2 - t1).count(), recall);
+    printf("%d,%d,%f,%f\n",nc, buffer_size, nq/diff.count(), recall);
 }

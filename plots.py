@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 import sys
 
-natt = 10
-ncon = 64
-results = np.loadtxt('/scratch/gg29/constrainedANN/Results_sift_'+str(natt)+'_'+str(ncon)+'_1024.txt', delimiter=',')
+natt = 3
+ncon = 27
+results = np.loadtxt('/scratch/gg29/constrainedANN/Results_sift_'+str(natt)+'_'+str(ncon)+'_1024v2.txt', delimiter=',')
 idxsize = [128, 256, 512, 1024, 2048]
 color=cm.rainbow(np.linspace(0,1,len(idxsize)))
 
@@ -23,7 +23,7 @@ plt.plot(x, y ,color = 'red',marker='o', label="Our method")
 
 plt.xlabel('QPS')
 plt.ylabel('Recall100@100')    
-plt.title('SIFT, num_attributes=10 , total_constraints='+str(ncon)+' ')
+plt.title('SIFT, num_attributes=3 , total_constraints='+str(ncon)+' ')
 # plt.xscale('log')
 # plt.grid()
 plt.minorticks_on()
@@ -37,9 +37,7 @@ plt.legend(fontsize=7.5)
 
 
 
-natt = 10
-ncon = 64
-results = np.loadtxt('/scratch/gg29/ResultsNHQ_sift_'+str(natt)+'_'+str(ncon)+'.txt' , delimiter=',')
+results = np.loadtxt('/scratch/gg29/ResultsNHQ_sift_'+str(natt)+'_'+str(ncon)+'.txt' , delimiter=' ')
 
 # plt.figure()
 x = 10000/results[:,0]
@@ -48,7 +46,7 @@ plt.plot(x, y ,color = 'blue',marker='o', label="NHQ")
 
 plt.xlabel('QPS')
 plt.ylabel('Recall100@100')    
-plt.title('SIFT, num_attributes=10 , total_constraints='+str(ncon)+', NHQ ')
+plt.title('SIFT, num_attributes=3 , total_constraints='+str(ncon)+', NHQ ')
 # plt.xscale('log')
 # plt.grid()
 plt.minorticks_on()
@@ -59,5 +57,5 @@ plt.grid(which='major', color='black', linestyle='-')
 plt.legend(fontsize=7.5)
 # plt.show()
 plt.savefig('NHQsift_'+str(natt)+'_'+str(ncon)+'.png', dpi = 500)
-plt.savefig('Comparision sift_'+str(natt)+'_'+str(ncon)+'.png', dpi = 500)
+plt.savefig('Comparision sift_'+str(natt)+'_'+str(ncon)+'corrected.png', dpi = 500)
 

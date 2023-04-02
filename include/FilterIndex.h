@@ -50,10 +50,11 @@ class FilterIndex
         uint32_t* counts;
         int32_t* neighbor_set;
         int treelen;
+        int numAttr;
         
         unordered_map<uint16_t, uint16_t>PrpAtrMap;
         vector<vector<uint16_t>>properties;
-        vector<vector<uint16_t>>properties_reordered;
+        uint16_t* properties_reordered;
         vector<vector<uint16_t>> ClusterProperties;//properties of each cluster
         // vector<pair<uint16_t, pair<uint16_t, int>>> maxMC;
         uint16_t* maxMC;

@@ -1,15 +1,8 @@
 #include <iostream>
-#include <fstream>
 #include <vector>
-#include <stdlib.h>     /* calloc, exit, free */
-#include <numeric>
 #include <algorithm>
 #include <string> 
-#include <cstdint>
 #include <map>
-#include <chrono>
-#include <cmath>
-#include <cstdio>
 #include <random>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -18,20 +11,30 @@
 #include "readfile.h"
 #include "utils.h"
 #include "FilterIndex.h"
-
 #include <faiss/Clustering.h> 
 #include <faiss/IndexFlat.h>
 #include <bits/stdc++.h>
 
 using namespace std;
-using namespace faiss;
 
 template <typename S>
-// operator to print vectors
+// operator to print vectors, matrix
 ostream& operator<<(ostream& os, const vector<S>& vector){
     // Printing vector elements using <<
     for (auto element : vector) {
         os << element << " ";
+    }
+    return os;
+}
+
+template <typename S>
+ostream& operator<<(ostream& os, const vector<vector<S>>& matrix){
+    // Printing matrix elements using <<
+    for (const vector<S>& vector : matrix) {
+        for (auto element : vector) {
+            os << element << " ";
+        }
+    os << endl;
     }
     return os;
 }
@@ -43,7 +46,6 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
     nc = nc_; // num clusters
     treelen = 4; //length of hamming tree, num miniclusters= treelen+1
 
-    //transform properties to uint16_t
     properties.resize(nb);
     uint16_t cnt=0;
     for (int i=0; i<nb; i++){
@@ -54,11 +56,12 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
             }
             properties[i].push_back(prLook[prp]);
         }
-        // sort(properties[i].begin(), properties[i].end()); // beware:: sorting the properties will loose the position information!!
+        // beware:: sorting the properties will loose the position information!!
+        // sort(properties[i].begin(), properties[i].end()); 
     }   
-    cout<<cnt<<" unique constraints"<<endl; 
+    cout<<cnt<<" total unique constraints"<<endl; 
     // Properties to location map
-    int numAttr = properties[0].size();
+    numAttr = properties[0].size();
     for (int i=0; i<nb; i++){
         for (int j=0; j<numAttr; j++){
             PrpAtrMap[properties[i][j]] = j;
@@ -74,10 +77,10 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]{0};
-    //init: Take uniform random points from the corpus. They will be used as kmeans initialization
+    //init: take uniform random points from the cluster
     int v[nb];
     randomShuffle(v , 0, nb);
-    Clustering clus(d, nc);
+    faiss::Clustering clus(d, nc);
     clus.centroids.resize(d*nc);
     for(uint32_t i = 0; i < nc; ++i) { 
         for(uint32_t j = 0; j < d; ++j){
@@ -88,10 +91,10 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     clus.verbose = d * nb * nc > (1L << 30);
     // display logs if > 1Gflop per iteration
 
-    IndexFlatL2 index(d);
+    faiss::IndexFlatL2 index(d);
     clus.train(nb, dataset, index);
     memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * d * nc);
-    cout<<"centroids size: "<<clus.centroids.size()<<endl; //centroids (nc * d)
+    cout<<"centroids size: "<<clus.centroids.size()<<endl; //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
     
     // if L2 get norms as well
     for(uint32_t j = 0; j < nc; ++j){ 
@@ -101,6 +104,7 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         } 
         cen_norms[j] = cen_norms[j]/2;
     }
+    //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
     for(uint32_t j = 0; j < nb; ++j){  
         for(uint32_t k = 0; k < d; ++k) {    
             data_norms[j]=0;             
@@ -108,13 +112,16 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         } 
         data_norms[j]=data_norms[j]/2;
     }
-    //observation: clusters are not balanced if not initiliased with random vectors from the corpus
-    uint32_t* invLookup = new uint32_t[nb];
+    //observation: clusters are not balanced if not initiliased with random vectors
+
+     uint32_t* invLookup = new uint32_t[nb];
+    // Lookup= new uint32_t[nb];
+    // counts = new uint32_t[nc+1]{0};
     // this needs to be integrated in clustering, use openmp, use Strassen algorithm for matmul*
     //get best score cluster
     #pragma omp parallel for  
     for(uint32_t i = 0; i < nb; ++i) {  
-        float bin, minscore, temp;// per thread local variables
+        float bin, minscore, temp;
         minscore = 1000000;      
         for(uint32_t j = 0; j < nc; ++j){  
             temp =0;
@@ -127,7 +134,8 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         }
         invLookup[i] = bin;    
     }
-    for(uint32_t i = 0; i < nb; ++i) {
+
+     for(uint32_t i = 0; i < nb; ++i) {
         counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
     }
     for(uint32_t j = 1; j < nc+1; ++j) {
@@ -137,10 +145,6 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     //argsort invLookup to get the Lookup
     iota(Lookup, Lookup+nb, 0);
     stable_sort(Lookup, Lookup+nb, [&invLookup](size_t i1, size_t i2) {return invLookup[i1] < invLookup[i2];});
-
-    this->invLookup = invLookup;
-    cout<<"Got Lookup"<<endl;
-
     get_mc_propertiesIndex(); // this will change counts, Lookup; and add maxMC tree
 
     //save index files
@@ -157,14 +161,10 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
     fwrite(counts, sizeof(uint32_t), nc*(treelen+1)+1, f5);
     FILE* f6 = fopen((indexpath+"/maxMC.bin").c_str(), "w");
     fwrite(maxMC, sizeof(uint16_t), nc*(treelen+1)*3, f6);
-
-    // rank items in bins by distance?
 }   
 
-//get most seen constraint
-// exclude and get most seen next constraint
 void FilterIndex::get_mc_propertiesIndex(){
-    vector<vector<uint32_t>> maxMCIDs; //nested array to store the mini-clusters, change to uint32_t array
+    vector<vector<uint32_t>> maxMCIDs; //nested array to store the mini-clusters, change to uint32_t array later
     maxMCIDs.resize((treelen+1)*nc);
     maxMC = new uint16_t[3*(treelen+1)*nc]; 
 
@@ -193,8 +193,6 @@ void FilterIndex::get_mc_propertiesIndex(){
         //maxMC serves as a node list and node data size in hamming tree, where
         //node: property from maxMC
         //node data: corresponding vector IDs
-
-        //maxMC has all zeros!!??
         for (int i =counts[clID]; i< counts[clID+1]; i++){
             for (int j=0; j< treelen; j++){
                 int r = (treelen+1)*3*clID + 3*j;
@@ -207,11 +205,8 @@ void FilterIndex::get_mc_propertiesIndex(){
             maxMCIDs[(treelen+1)*clID +treelen].push_back(Lookup[i]);
             m_label:;
         }
-        // assert (counts[clID+1]-counts[clID]= maxMCIDs[(treelen+1)*clID +j]+ )
     }
-
- 
-
+    //need some assert statements
     //update Lookup, counts. Flatten the maxMCIDs into Lookup
     //each cluster now spans treelen+1 buckets
     Lookup= new uint32_t[nb];
@@ -223,12 +218,10 @@ void FilterIndex::get_mc_propertiesIndex(){
             memcpy(Lookup+ counts[id], maxMCIDs[id].data(), sizeof(*Lookup) * maxMCIDs[id].size());
         }
     }
- 
 }
-//      hamming tree partitons maynot be balanced. Can we balance them?
 
 void FilterIndex::loadIndex(string indexpath){
-    centroids = new float[d*nc]; //provide random nc vectors
+    centroids = new float[d*nc]; 
     cen_norms = new float[nc]{0};
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
@@ -253,35 +246,40 @@ void FilterIndex::loadIndex(string indexpath){
     // fwrite(maxMC, sizeof(uint16_t), nc*(treelen+1)*3, f6);
     get_mc_propertiesIndex();
 
-    // reorder data
+    //this changes Lookup
+    for (int i =0; i< nc*(treelen+1); i++){
+        int m1 = counts[i];
+        int m2 = counts[i+1];
+        sort(Lookup+m1, Lookup+m2,
+            [&](uint32_t a, uint32_t b) {
+            return properties[a] < properties[b];
+            });
+    }
+    // reorder data and index
     dataset_reordered = new float[nb*d];
     data_norms_reordered = new float[nb];
-    properties_reordered.resize(nb);
+    properties_reordered = new uint16_t[nb*numAttr];
     for(uint32_t i = 0; i < nb; ++i) {
         copy(dataset+Lookup[i]*d, dataset+(Lookup[i]+1)*d , dataset_reordered+i*d);
         data_norms_reordered[i] = data_norms[Lookup[i]];
-        properties_reordered[i] = properties[Lookup[i]];
+        memcpy(properties_reordered+ i*numAttr, properties[Lookup[i]].data(), sizeof(*properties_reordered) * numAttr);
     }
+    // cout<<properties_reordered;
     delete dataset;
 }
 
 void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances){
-    chrono::time_point<chrono::high_resolution_clock> t1, t2, t3, t4, t5, t6;
     neighbor_set = new int32_t[nq*num_results]{-1};
     cout<<"num queries: "<<nq<<endl;
     for (size_t i = 0; i < nq; i++){
-        // t1 = chrono::high_resolution_clock::now();
         findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances, i);
-        // t2 = chrono::high_resolution_clock::now();
-        // cout<<"QT:  "<<chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<" ";
     }
 }
 
-// start from best custer and do filter then search, till you get topk
+// start from best cluster -> choose minicluster -> bruteforce search
 void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum)
 {   
-    // chrono::time_point<chrono::high_resolution_clock> t1, t2, t3, t4, t5, t6;
-    // t1 = chrono::high_resolution_clock::now();
+    chrono::time_point<chrono::high_resolution_clock> t1, t2, t3, t4, t5, t6;
     vector<float> topkDist;
     vector<uint16_t> props;
     for (string stprp: Stprops){
@@ -290,41 +288,58 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     // sort(props.begin(), props.end());
 
     priority_queue<pair<float, uint32_t> > pq;
-    float sim;
+    float simv[nc];
+    uint32_t simid[nc];
     for (uint32_t id=0; id<nc; id++){
-        sim = L2SqrSIMD16ExtAVX(query, centroids+id*d, cen_norms[id], d);
-        pq.push({sim, id});//max heap
+        simv[id] = L2SqrSIMD16ExtAVX(query, centroids+id*d, cen_norms[id], d);
     }
-    // for each id in pq
-    // filter then search bruteforce
+    // need argsort here
+    iota(simid, simid+nc, 0);
+    stable_sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
+
     priority_queue<pair<float, uint32_t> > Candidates_pq;
+    uint32_t Candidates[max_num_distances];
+    float score[max_num_distances];
     int seen=0, seenbin=0;
-    // need software prefetch or data reordering here
+
+    float sim;
+    float a=0,b=0;
+    // t1 = chrono::high_resolution_clock::now();
     while(seen<max_num_distances && seenbin<nc){ 
-        uint32_t bin = pq.top().second;
-        pq.pop();
+        uint32_t bin = simid[seenbin];
         seenbin++;
         int id = bin*(treelen+1);
-
         bin = bin*(treelen+1);
         //get which disjoint part of the cluster query belongs to
         uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
-        bin = bin+membership;            
+        bin = bin+membership;
         for (int i =counts[bin]; i< counts[bin+1]; i++){
+            // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2);
             //check if constraint statisfies
             int j =0;
-            while (j<props.size() && properties_reordered[i][j]== props[j]) j++;
-            if (j==props.size()){
+            while (j<numAttr && properties_reordered[i*numAttr +j]== props[j]) j++;
+            if (j==numAttr){
+                Candidates[seen]=i; 
                 seen++;
-                sim = L2SqrSIMD16ExtAVX(query, dataset_reordered +i*d, data_norms_reordered[i], d);
-                Candidates_pq.push({sim, Lookup[i]});
             }
         }
     }
-    for (int i =0; i< min(seen,num_results); i++){ 
-        neighbor_set[qnum*num_results+ i] = Candidates_pq.top().second;
-        Candidates_pq.pop();
-    }
     // t2 = chrono::high_resolution_clock::now();
-    // cout<<"time: "<<chrono::duration_cast<chrono::microseconds>(t2 - t1).count()<<" ";
+    if (seen<num_results+1){
+        for (int i =0; i< seen; i++){ 
+            neighbor_set[qnum*num_results+ i] = Lookup[Candidates[i]];
+        }
+    }
+    else{
+        for (int i =0; i< seen; i++){ 
+            //  __builtin_prefetch (dataset_reordered +Candidates[i+1]*d, 0, 2);
+            score[i] = L2SqrSIMD16ExtAVX(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
+            Candidates_pq.push({score[i], Lookup[Candidates[i]]});
+        }
+        for (int i =0; i< min(seen,num_results); i++){ 
+            neighbor_set[qnum*num_results+ i] = Candidates_pq.top().second;
+            Candidates_pq.pop();
+        }
+    }
+    // cout<<"time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()<<" ";
 }
