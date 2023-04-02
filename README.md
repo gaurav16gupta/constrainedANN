@@ -33,13 +33,15 @@ Get Data:
 For your own data
 - base vectors and query vectors are stored in .fvecs format
 - base and query attributes are stored in .txt files. Format is
-    <num points> <num attributes>
-    2 outdoor night
-    1 indoor daytime
-    3 outdoor night
-    2 indoor daytime
-    3 outdoor daytime
-
+```
+<num points> <num attributes>
+2 outdoor night
+1 indoor daytime
+3 outdoor night
+2 indoor daytime
+3 outdoor daytime
+```
+ 
 Where "2 outdoor night" is an example of space seperated 3 attributes.
 
 Run
