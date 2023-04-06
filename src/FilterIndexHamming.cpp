@@ -167,37 +167,40 @@ void FilterIndex::get_mc_propertiesIndex(){
     vector<vector<uint32_t>> maxMCIDs; //nested array to store the mini-clusters, change to uint32_t array later
     maxMCIDs.resize((treelen+1)*nc);
     maxMC = new uint16_t[3*(treelen+1)*nc]; 
-
     for (int clID = 0; clID < nc; clID++){
-        if (counts[clID+1]- counts[clID]==0) continue;
+        if (counts[clID+1]- counts[clID]==0) continue; // what  if the cluster size is less than 4. Do something then
         //get count of vector properties        
         //get the max
         for (int h=0; h<treelen; h++){ //iterate over tree height
             unordered_map<uint16_t, int> freq; //property to frequency map
             for (int i =counts[clID]; i< counts[clID+1]; i++){ // for all points in the cluster
                 for (uint16_t x: properties[Lookup[i]]){
-                    if(not_in(x, maxMC + (treelen+1)*clID*3, h)) freq[x]++;
+                    if(not_in(x, maxMC + (treelen+1)*clID*3, h)) freq[x]++; // count number of items with the property x 
                 }
             }
 
-            //choose property with max freq
-            auto maxElement = max_element(freq.begin(), freq.end(),
-                [](const pair<uint16_t, int>& p1, const pair<uint16_t, int>& p2) { return p1.second < p2.second;}
-            );
             int r = (treelen+1)*3*clID + 3*h;
-            maxMC[r+0]= PrpAtrMap[maxElement->first]; // property location
-            maxMC[r+1]= maxElement->first; // property
-            maxMC[r+2]= maxElement->second; // frequency, do we need this in maxMC??
+            //choose property with max freq
+            if (freq.end()== freq.begin()){
+                maxMC[r+0]= 0; // property location
+                maxMC[r+1]= 0; // property
+                maxMC[r+2]= 0; // frequency
+            }
+            else{
+                auto maxElement = max_element(freq.begin(), freq.end(),
+                                    [](const pair<uint16_t, int>& p1, const pair<uint16_t, int>& p2) { return p1.second < p2.second;});
+                maxMC[r+0]= PrpAtrMap[maxElement->first]; // property location
+                maxMC[r+1]= maxElement->first; // property
+                maxMC[r+2]= maxElement->second; // frequency, do we need this in maxMC??
+            }
         }
-
         //maxMC serves as a node list and node data size in hamming tree, where
         //node: property from maxMC
         //node data: corresponding vector IDs
         for (int i =counts[clID]; i< counts[clID+1]; i++){
             for (int j=0; j< treelen; j++){
                 int r = (treelen+1)*3*clID + 3*j;
-                // cout<<properties[Lookup[i]]<<" "<<maxMC[r]<<endl;
-                if(properties[Lookup[i]][maxMC[r]]==maxMC[r+1]){ 
+                if((properties[Lookup[i]][maxMC[r]]==maxMC[r+1]) && (maxMC[r+2]>0)){ 
                     maxMCIDs[(treelen+1)*clID +j].push_back(Lookup[i]);
                     goto m_label;
                 }
@@ -244,12 +247,12 @@ void FilterIndex::loadIndex(string indexpath){
     // fread(counts, sizeof(uint32_t), nc*(treelen+1)+1, f5);
     // FILE* f6 = fopen((indexpath+"/maxMC.bin").c_str(), "r");
     // fwrite(maxMC, sizeof(uint16_t), nc*(treelen+1)*3, f6);
+    
     get_mc_propertiesIndex();
-
     //this changes Lookup
     for (int i =0; i< nc*(treelen+1); i++){
         int m1 = counts[i];
-        int m2 = counts[i+1];
+        int m2 = counts[i+1]; // some miniclusters are empty!!
         sort(Lookup+m1, Lookup+m2,
             [&](uint32_t a, uint32_t b) {
             return properties[a] < properties[b];
@@ -286,7 +289,6 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         props.push_back(prLook[stprp]);
     }
     // sort(props.begin(), props.end());
-
     priority_queue<pair<float, uint32_t> > pq;
     float simv[nc];
     uint32_t simid[nc];
