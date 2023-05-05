@@ -2,20 +2,22 @@
 #include <fstream>
 #include "FilterIndex.h"
 
+#define DATAPATH "/scratch/gg29/data/"
+
 int main(int argc, char** argv)
 {
-    if (argc != 5){
-        std::cout << argv[0] << " dataname num_clusters numAttribites buffer_size"<< std::endl;
+    if (argc != 6){
+        std::cout << argv[0] << " dataname num_clusters numAttribites buffer_size mode"<< std::endl;
         exit(-1);
     }
     
-    string datapath = "../data/" + string(argv[1]) + "/base.fvecs"; 
-    string Attripath = "../data/" + string(argv[1]) + "/label_base_"+string(argv[3])+".txt"; 
-    string querypath = "../data/" + string(argv[1]) + "/query.fvecs"; 
-    string queryAttripath = "../data/" + string(argv[1]) + "/label_query_"+string(argv[3])+".txt"; 
-    string GTpath = "../data/" + string(argv[1]) + "/label_"+string(argv[3])+"_hard_groundtruth.ivecs"; 
-    string indexpath = string(argv[1])+ string(argv[2]) + string(argv[3]);
-    
+    string datapath = DATAPATH + string(argv[1]) + "/base.fvecs"; 
+    string Attripath = DATAPATH + string(argv[1]) + "/label_base_"+string(argv[3])+".txt"; 
+    string querypath = DATAPATH + string(argv[1]) + "/query.fvecs"; 
+    string queryAttripath = DATAPATH + string(argv[1]) + "/label_query_"+string(argv[3])+".txt"; 
+    string GTpath = DATAPATH + string(argv[1]) + "/label_"+string(argv[3])+"_hard_groundtruth.ivecs"; 
+    string indexpath = "indices/"+ string(argv[1])+ string(argv[2]) + string(argv[3])+ "Mode" + string(argv[5]) ;
+    cout<<indexpath<<endl;
     string metric;
     if (string(argv[1])=="sift"){
         metric="L2";}
@@ -42,6 +44,7 @@ int main(int argc, char** argv)
 
     chrono::time_point<chrono::high_resolution_clock> t1, t2;
     t1 = chrono::high_resolution_clock::now();
+    
     myFilterIndex.query(queryset, nq, queryprops, num_results, buffer_size);
     t2 = chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = t2 - t1;

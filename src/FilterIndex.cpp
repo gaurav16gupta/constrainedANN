@@ -1,19 +1,4 @@
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <string> 
-#include <map>
-#include <random>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <chrono>
-
-#include "readfile.h"
-#include "utils.h"
 #include "FilterIndex.h"
-#include <faiss/Clustering.h> 
-#include <faiss/IndexFlat.h>
-#include <bits/stdc++.h>
 
 using namespace std;
 using namespace faiss;

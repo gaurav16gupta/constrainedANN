@@ -6,9 +6,6 @@
 #include <vector>
 #include <set>
 #include <iterator>
-#include "MurmurHash3.h"
-#include "cbloomfilter.h"
-#include "crambo.h"
 #include "readfile.h"
 #include <stdlib.h>     /* calloc, exit, free */
 #include <numeric>
@@ -39,6 +36,8 @@ vector<vector<int>> computeGroundTruth(vector<vector<int>> queryset, vector<set<
 vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, vector<uint32_t> idx, uint32_t idxSize, uint32_t k, vector<float> topkDist);
 float L2sim(float* a, float* b, float norm_bsq, size_t d);
 float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty);
+float IP(float* a, float* b, size_t d);
+float IPSIMD16ExtAVX(float *pVect1, float *pVect2, size_t qty);
 uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen);
 bool not_in(uint16_t x, uint16_t* a, int h);
 

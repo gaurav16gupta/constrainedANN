@@ -6,12 +6,8 @@
 #include <vector>
 #include <set>
 #include <iterator>
-#include "MurmurHash3.h"
-#include "cbloomfilter.h"
-#include "crambo.h"
 #include "FaissKMeans.h"
-// #include "cfilterindex.h"
-#include <stdlib.h>     /* calloc, exit, free */
+#include <stdlib.h>     
 #include <numeric>
 #include <algorithm>
 #include <string> 
@@ -23,13 +19,16 @@
 #include "faiss/AutoTune.h"
 #include "faiss/index_factory.h"
 #include "faiss/index_io.h"
+#include "FaissKMeans.h"
+#include "BLISS.h"
+
 using namespace std;
 
 class FilterIndex
 {
     public:
         FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_);
-        void get_kmeans_index(string metric, string indexpath);
+        void get_index(string metric, string indexpath, string algo);
         void get_cluster_propertiesIndex();
 
         void loadIndex(string indexpath);
@@ -51,7 +50,9 @@ class FilterIndex
         int32_t* neighbor_set;
         int treelen;
         int numAttr;
-        
+
+        // Kmeans* kmeans;
+        BLISS* bliss;
         unordered_map<uint16_t, uint16_t>PrpAtrMap;
         vector<vector<uint16_t>>properties;
         uint16_t* properties_reordered;

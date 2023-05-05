@@ -1,13 +1,13 @@
 
 CXX=g++
 CFLAGS = -std=gnu++17 -lgfortran -Wall -O3 -w -mavx
-INC=-I ./../faiss -I include/
-LFLAGS=./../faiss/build/faiss/libfaiss.a /home/gg29/OpenBLAS/libopenblas.a -lpthread -lm -ldl -lgfortran -fopenmp
+INC=-I /scratch/gg29/faiss -I include/
+LFLAGS=/scratch/gg29/faiss/build/faiss/libfaiss.a /home/gg29/OpenBLAS/libopenblas.a -lpthread -lm -ldl -lgfortran -fopenmp
 
 index: clean_index
 	$(CXX) $(INC) $(CFLAGS) src/readfile.cpp \
 							src/utils.cpp \
-							src/FilterIndex.cpp \
+							src/FilterIndexHamming.cpp \
 							src/index.cpp \
 	-o index $(LFLAGS)
 

@@ -1,19 +1,6 @@
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <string> 
-#include <map>
-#include <random>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <chrono>
 
-#include "readfile.h"
-#include "utils.h"
+#include <sys/stat.h>
 #include "FilterIndex.h"
-#include <faiss/Clustering.h> 
-#include <faiss/IndexFlat.h>
-#include <bits/stdc++.h>
 
 using namespace std;
 
@@ -46,6 +33,8 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
     nc = nc_; // num clusters
     treelen = 4; //length of hamming tree, num miniclusters= treelen+1
 
+    // kmeans = new Kmeans(nc, d);
+    bliss = new BLISS(d, 256, nc);
     properties.resize(nb);
     uint16_t cnt=0;
     for (int i=0; i<nb; i++){
@@ -71,40 +60,15 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
 
 //NN index
 // TODO: have more partitioning methods. Include BLISS
-void FilterIndex::get_kmeans_index(string metric, string indexpath){
-    centroids = new float[d*nc]; //provide random nc vectors
-    cen_norms = new float[nc]{0};
+void FilterIndex::get_index(string metric, string indexpath, string algo){
+    // centroids = new float[d*nc]; //provide random nc vectors
+    // cen_norms = new float[nc]{0};
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]{0};
-    //init: take uniform random points from the cluster
-    int v[nb];
-    randomShuffle(v , 0, nb);
-    faiss::Clustering clus(d, nc);
-    clus.centroids.resize(d*nc);
-    for(uint32_t i = 0; i < nc; ++i) { 
-        for(uint32_t j = 0; j < d; ++j){
-            clus.centroids[i*d+j] = dataset[v[i]*d +j];
-        }
-        // memcpy(clus.centroids + i*d, dataset +v[i]*d, sizeof(*centroids) * d);
-    }
-    clus.verbose = d * nb * nc > (1L << 30);
-    // display logs if > 1Gflop per iteration
 
-    faiss::IndexFlatL2 index(d);
-    clus.train(nb, dataset, index);
-    memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * d * nc);
-    cout<<"centroids size: "<<clus.centroids.size()<<endl; //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
-    
-    // if L2 get norms as well
-    for(uint32_t j = 0; j < nc; ++j){ 
-        cen_norms[j]=0; 
-        for(uint32_t k = 0; k < d; ++k) {                 
-            cen_norms[j] += centroids[j*d +k]*centroids[j*d +k];        
-        } 
-        cen_norms[j] = cen_norms[j]/2;
-    }
-    //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
+    // kmeans->train(dataset, nb);
+    bliss->load("/scratch/gg29/constrainedANN/LearnedDP/BLISS/indices/siftMode1/model.bin");
     for(uint32_t j = 0; j < nb; ++j){  
         for(uint32_t k = 0; k < d; ++k) {    
             data_norms[j]=0;             
@@ -112,55 +76,40 @@ void FilterIndex::get_kmeans_index(string metric, string indexpath){
         } 
         data_norms[j]=data_norms[j]/2;
     }
-    //observation: clusters are not balanced if not initiliased with random vectors
-
-     uint32_t* invLookup = new uint32_t[nb];
-    // Lookup= new uint32_t[nb];
-    // counts = new uint32_t[nc+1]{0};
+    
+    uint32_t* invLookup = new uint32_t[nb];
     // this needs to be integrated in clustering, use openmp, use Strassen algorithm for matmul*
     //get best score cluster
     #pragma omp parallel for  
     for(uint32_t i = 0; i < nb; ++i) {  
-        float bin, minscore, temp;
-        minscore = 1000000;      
-        for(uint32_t j = 0; j < nc; ++j){  
-            temp =0;
-            for(uint32_t k = 0; k < d; ++k) {                 
-                temp += pow(dataset[i*d + k] - centroids[j*d +k], 2);        
-            } 
-            if (temp<minscore) {
-                minscore=temp;
-                bin = j;}    
-        }
-        invLookup[i] = bin;    
+        invLookup[i] = bliss->top(dataset+ i*d);   
     }
-
      for(uint32_t i = 0; i < nb; ++i) {
         counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
     }
     for(uint32_t j = 1; j < nc+1; ++j) {
         counts[j] = counts[j]+ counts[j-1]; //cumsum 
     }
-    
+
     //argsort invLookup to get the Lookup
     iota(Lookup, Lookup+nb, 0);
     stable_sort(Lookup, Lookup+nb, [&invLookup](size_t i1, size_t i2) {return invLookup[i1] < invLookup[i2];});
-    get_mc_propertiesIndex(); // this will change counts, Lookup; and add maxMC tree
+    // get_mc_propertiesIndex(); // this will change counts, Lookup; and add maxMC tree
 
     //save index files
     mkdir(indexpath.c_str(), 0777);
-    FILE* f1 = fopen((indexpath+"/centroids.bin").c_str(), "w");
-    fwrite(centroids, sizeof(float), nc*d, f1);
-    FILE* f2 = fopen((indexpath+"/centroidsNorms.bin").c_str(), "w");
-    fwrite(cen_norms, sizeof(float), nc, f2);
-    FILE* f3 = fopen((indexpath+"/dataNorms.bin").c_str(), "w");
+    
+    FILE* f3 = fopen((indexpath+"/dataNorms.bin").c_str(), "wb");
     fwrite(data_norms, sizeof(float), nb, f3);
-    FILE* f4 = fopen((indexpath+"/Lookup.bin").c_str(), "w");
+    fclose (f3);
+    FILE* f4 = fopen((indexpath+"/Lookup.bin").c_str(), "wb");
     fwrite(Lookup, sizeof(uint32_t), nb, f4);
-    FILE* f5 = fopen((indexpath+"/counts.bin").c_str(), "w");
+    fclose (f4);
+    FILE* f5 = fopen((indexpath+"/counts.bin").c_str(), "wb");
     fwrite(counts, sizeof(uint32_t), nc*(treelen+1)+1, f5);
-    FILE* f6 = fopen((indexpath+"/maxMC.bin").c_str(), "w");
-    fwrite(maxMC, sizeof(uint16_t), nc*(treelen+1)*3, f6);
+    fclose (f5);
+
+    // kmeans->save(indexpath);
 }   
 
 void FilterIndex::get_mc_propertiesIndex(){
@@ -178,7 +127,6 @@ void FilterIndex::get_mc_propertiesIndex(){
                     if(not_in(x, maxMC + (treelen+1)*clID*3, h)) freq[x]++; // count number of items with the property x 
                 }
             }
-
             int r = (treelen+1)*3*clID + 3*h;
             //choose property with max freq
             if (freq.end()== freq.begin()){
@@ -224,18 +172,14 @@ void FilterIndex::get_mc_propertiesIndex(){
 }
 
 void FilterIndex::loadIndex(string indexpath){
-    centroids = new float[d*nc]; 
-    cen_norms = new float[nc]{0};
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]; 
     // counts = new uint32_t[nc*(treelen+1)+1]; 
     // maxMC = new uint16_t[3*(treelen+1)*nc]; 
+    
+    bliss->load("/scratch/gg29/constrainedANN/LearnedDP/BLISS/indices/siftMode1/model.bin");
 
-    FILE* f1 = fopen((indexpath+"/centroids.bin").c_str(), "r");
-    fread(centroids, sizeof(float), nc*d, f1);       
-    FILE* f2 = fopen((indexpath+"/centroidsNorms.bin").c_str(), "r");
-    fread(cen_norms, sizeof(float), nc, f2);
     FILE* f3 = fopen((indexpath+"/dataNorms.bin").c_str(), "r");
     fread(data_norms, sizeof(float), nb, f3);
     FILE* f4 = fopen((indexpath+"/Lookup.bin").c_str(), "r");
@@ -247,7 +191,6 @@ void FilterIndex::loadIndex(string indexpath){
     // fread(counts, sizeof(uint32_t), nc*(treelen+1)+1, f5);
     // FILE* f6 = fopen((indexpath+"/maxMC.bin").c_str(), "r");
     // fwrite(maxMC, sizeof(uint16_t), nc*(treelen+1)*3, f6);
-    
     get_mc_propertiesIndex();
     //this changes Lookup
     for (int i =0; i< nc*(treelen+1); i++){
@@ -290,15 +233,13 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     }
     // sort(props.begin(), props.end());
     priority_queue<pair<float, uint32_t> > pq;
-    float simv[nc];
     uint32_t simid[nc];
-    for (uint32_t id=0; id<nc; id++){
-        simv[id] = L2SqrSIMD16ExtAVX(query, centroids+id*d, cen_norms[id], d);
-    }
-    // need argsort here
+    float simv[nc];
+    bliss->score(query, simv);
+   
+    // need argsorted IDs
     iota(simid, simid+nc, 0);
     stable_sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
-
     priority_queue<pair<float, uint32_t> > Candidates_pq;
     uint32_t Candidates[max_num_distances];
     float score[max_num_distances];
@@ -315,7 +256,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         //get which disjoint part of the cluster query belongs to
         uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
         bin = bin+membership;
-        for (int i =counts[bin]; i< counts[bin+1]; i++){
+        for (int i =counts[bin]; i< counts[bin+1] && seen<max_num_distances; i++){
             // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2);
             //check if constraint statisfies
             int j =0;

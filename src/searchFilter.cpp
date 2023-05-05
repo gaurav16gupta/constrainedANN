@@ -1,29 +1,4 @@
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <stdlib.h>     /* calloc, exit, free */
-#include <numeric>
-#include <algorithm>
-#include <string> 
-#include <cstdint>
-#include <map>
-#include <chrono>
-#include <cmath>
-#include <cstdio>
-#include <random>
-#include <sys/time.h>
-
-#include "cbloomfilter.h"
-#include "crambo.h"
-#include "readfile.h"
-#include "utils.h"
 #include "searchFilter.h"
-
-#include <faiss/Clustering.h>
-#include <faiss/IndexFlat.h>
-#include <faiss/index_factory.h>
-#include <faiss/AutoTune.h>
-#include <bits/stdc++.h>
 
 //include something for map
 using namespace std;

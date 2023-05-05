@@ -1,26 +1,6 @@
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <cstdlib>
-#include <vector>
-#include <set>
-#include <iterator>
-#include "MurmurHash3.h"
-#include "cbloomfilter.h"
-#include "crambo.h"
-#include "readfile.h"
-#include <stdlib.h>     /* calloc, exit, free */
-#include <numeric>
-#include <algorithm>
-#include <string> 
-#include <cstdint>
-#include <map>
-
-#include <cstdio>
 #include "utils.h"
 #include <bits/stdc++.h>
-
 
 using namespace std;
 
@@ -65,6 +45,32 @@ float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty
     }
     _mm256_store_ps(TmpRes, sum256);
     float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] - norm_bsq;
+    return sum;
+}
+
+float IP(float* a, float* b, size_t d){
+    float ip=0;
+    for(uint32_t k = 0; k < d; ++k) {    
+        ip += a[k]*b[k]; // one unit FLOP- mul
+    } 
+    return ip;
+}
+        
+float IPSIMD16ExtAVX(float *pVect1, float *pVect2, size_t qty) {
+    float PORTABLE_ALIGN32 TmpRes[8];
+    size_t qty16 = qty / 16;
+    const float *pEnd1 = pVect1 + 16 * qty16;
+    __m256 sum256 = _mm256_set1_ps(0);
+    while (pVect1 < pEnd1) {
+        //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
+        const __m256 v1 = _mm256_loadu_ps(pVect1);
+        pVect1 += 8;
+        const __m256 v2 = _mm256_loadu_ps(pVect2);
+        pVect2 += 8;
+        sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
+    }
+    _mm256_store_ps(TmpRes, sum256);
+    float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7];
     return sum;
 }
 
@@ -238,8 +244,51 @@ vector<int> vectorArgsort(vector<double> query)
 }
 
 
+// save a load multiple vectors into the same bin file----
+// bool save(const char * filename){
+//     std::ofstream out(filename, std::ios::binary);
+//     int a=A.size(), b=B.size(), c=C.size(), d=D.size(), e=E.size(), f=F.size();
+//     out.write(reinterpret_cast<const char*>(&a), sizeof(a));
+//     out.write(reinterpret_cast<const char*>(&b), sizeof(b));
+//     out.write(reinterpret_cast<const char*>(&c), sizeof(c));
+//     out.write(reinterpret_cast<const char*>(&d), sizeof(d));
+//     out.write(reinterpret_cast<const char*>(&e), sizeof(e));
+//     out.write(reinterpret_cast<const char*>(&f), sizeof(f));
 
+//     out.write(reinterpret_cast<const char*>(&A[0]), sizeof(int)*A.size());
+//     out.write(reinterpret_cast<const char*>(&B[0]), sizeof(int)*B.size());
+//     out.write(reinterpret_cast<const char*>(&C[0]), sizeof(int)*C.size());
+//     out.write(reinterpret_cast<const char*>(&D[0]), sizeof(int)*D.size());
+//     out.write(reinterpret_cast<const char*>(&E[0]), sizeof(int)*E.size());
+//     out.write(reinterpret_cast<const char*>(&F[0]), sizeof(int)*F.size());
 
+//     // always check to see if the file opened, and if writes succeeded.  
+//     // I am being lazy here so I can focus on the actual question
+//     return true;
+// }
+
+// bool load(const char *filename){
+//     std::ifstream in(filename, std::ios::binary);
+//     int a, b, c, d, e, f;
+//     in.read(reinterpret_cast<char*>(&a), sizeof(a));
+//     in.read(reinterpret_cast<char*>(&b), sizeof(b));
+//     in.read(reinterpret_cast<char*>(&c), sizeof(c));
+//     in.read(reinterpret_cast<char*>(&d), sizeof(d));
+//     in.read(reinterpret_cast<char*>(&e), sizeof(e));
+//     in.read(reinterpret_cast<char*>(&f), sizeof(f));
+//     A.resize(a); B.resize(b); C.resize(c); D.resize(d); E.resize(e); F.resize(f);
+
+//     in.read(reinterpret_cast<char*>(&A[0]), sizeof(int)*A.size());
+//     in.read(reinterpret_cast<char*>(&B[0]), sizeof(int)*B.size());
+//     in.read(reinterpret_cast<char*>(&C[0]), sizeof(int)*C.size());
+//     in.read(reinterpret_cast<char*>(&D[0]), sizeof(int)*D.size());
+//     in.read(reinterpret_cast<char*>(&E[0]), sizeof(int)*E.size());
+//     in.read(reinterpret_cast<char*>(&F[0]), sizeof(int)*F.size());
+
+//     // always check to see if the file opened, and if writes succeeded.  
+//     // I am being lazy here so I can focus on the actual question
+//     return true;
+// }
 
 
 
