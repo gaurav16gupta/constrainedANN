@@ -8,6 +8,7 @@
 #include <string> 
 
 // should call the bliss python training code
+// make a clustering class and inherit it for faiss kmeans and bliss
 using namespace std;
 class BLISS
 {
@@ -18,10 +19,17 @@ class BLISS
         float* weights;
         
         BLISS(int s1, int s2, int s3): s1(s1), s2(s2), s3(s3){
-            weights = new float[256*129 +1024*257];
+            weights = new float[(s2*(s1+1) +s3*(s2+1))]; 
         }
 
-        float* score(float* input, float* last){
+        void train(float* dataset, int nb, string modelpath){
+            // load .bin
+            FILE* f = fopen((modelpath + "/model.bin").c_str(), "rb");
+            fread(weights, sizeof(float), (s2*(s1+1) +s3*(s2+1)), f); 
+            fclose (f);
+        } 
+
+        void getscore(float* input, float* last){
             float* hd = new float[s2];
             for (uint32_t id=0; id<s2; id++){
                 hd[id] = IPSIMD16ExtAVX(input, weights+ id*(s1+1), s1);
@@ -36,7 +44,6 @@ class BLISS
                 last[id] += *(L1+ id*(s2+1) +s2); //bias
             }
             // last = softmax(last);
-            return last;
         }
 
         uint32_t top(float* input){ 
@@ -61,9 +68,9 @@ class BLISS
         }
 
         void load(string modelpath){
-            // load .dat
-            FILE* f = fopen(modelpath.c_str(), "rb");
-            fread(weights, sizeof(float), 256*129 +1024*257, f);
+            // load .bin
+            FILE* f = fopen((modelpath + "/model.bin").c_str(), "rb");
+            fread(weights, sizeof(float), (s2*(s1+1) +s3*(s2+1)), f); 
             fclose (f);
         } 
 };

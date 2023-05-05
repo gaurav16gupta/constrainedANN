@@ -10,13 +10,14 @@ int main(int argc, char** argv)
         std::cout << argv[0] << " dataname num_clusters numAttribites buffer_size mode"<< std::endl;
         exit(-1);
     }
-    
+    string algo = "bliss"; // or bliss1, bliss2, bliss3
+
     string datapath = DATAPATH + string(argv[1]) + "/base.fvecs"; 
     string Attripath = DATAPATH + string(argv[1]) + "/label_base_"+string(argv[3])+".txt"; 
     string querypath = DATAPATH + string(argv[1]) + "/query.fvecs"; 
     string queryAttripath = DATAPATH + string(argv[1]) + "/label_query_"+string(argv[3])+".txt"; 
     string GTpath = DATAPATH + string(argv[1]) + "/label_"+string(argv[3])+"_hard_groundtruth.ivecs"; 
-    string indexpath = "indices/"+ string(argv[1])+ string(argv[2]) + string(argv[3])+ "Mode" + string(argv[5]) ;
+    string indexpath = "indices/"+ string(argv[1])+ string(argv[2]) +algo+ "Mode" + string(argv[5]) ;
     cout<<indexpath<<endl;
     string metric;
     if (string(argv[1])=="sift"){
@@ -31,7 +32,7 @@ int main(int argc, char** argv)
     float* data = fvecs_read(datapath.c_str(), &d, &nb);
     vector<vector<string>> properties = getproperties(Attripath,' ');
     nc = atoi(argv[2]); // num clusters
-    FilterIndex myFilterIndex(data, d, nb, nc, properties);
+    FilterIndex myFilterIndex(data, d, nb, nc, properties, algo);
     myFilterIndex.loadIndex(indexpath);
     cout << "Loaded" << endl;
 

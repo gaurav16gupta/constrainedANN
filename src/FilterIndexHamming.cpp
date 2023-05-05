@@ -26,15 +26,23 @@ ostream& operator<<(ostream& os, const vector<vector<S>>& matrix){
     return os;
 }
 
-FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_){
+FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_, string algo){
     dataset = data; // data
     d =d_; // dim
     nb = nb_; //num data points
     nc = nc_; // num clusters
     treelen = 4; //length of hamming tree, num miniclusters= treelen+1
 
-    // kmeans = new Kmeans(nc, d);
-    bliss = new BLISS(d, 256, nc);
+    // if (algo=="kmeans") {
+        // clusterAlgo = new Kmeans(nc, d);
+    // }
+    // else if (algo=="bliss") {
+        clusterAlgo = new BLISS(d, 256, nc);
+    //     }
+    // else {
+    //     cout<<"clustering unrecognised. Choosing Faiss-Kmeans as default"<<endl;
+    //     clusterAlgo = new Kmeans(nc, d);
+    // }
     properties.resize(nb);
     uint16_t cnt=0;
     for (int i=0; i<nb; i++){
@@ -59,16 +67,14 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
 }
 
 //NN index
-// TODO: have more partitioning methods. Include BLISS
-void FilterIndex::get_index(string metric, string indexpath, string algo){
+void FilterIndex::get_index(string metric, string indexpath){
     // centroids = new float[d*nc]; //provide random nc vectors
     // cen_norms = new float[nc]{0};
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]{0};
 
-    // kmeans->train(dataset, nb);
-    bliss->load("/scratch/gg29/constrainedANN/LearnedDP/BLISS/indices/siftMode1/model.bin");
+    clusterAlgo->train(dataset, nb, indexpath);
     for(uint32_t j = 0; j < nb; ++j){  
         for(uint32_t k = 0; k < d; ++k) {    
             data_norms[j]=0;             
@@ -82,7 +88,7 @@ void FilterIndex::get_index(string metric, string indexpath, string algo){
     //get best score cluster
     #pragma omp parallel for  
     for(uint32_t i = 0; i < nb; ++i) {  
-        invLookup[i] = bliss->top(dataset+ i*d);   
+        invLookup[i] = clusterAlgo->top(dataset+ i*d);   
     }
      for(uint32_t i = 0; i < nb; ++i) {
         counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
@@ -108,8 +114,6 @@ void FilterIndex::get_index(string metric, string indexpath, string algo){
     FILE* f5 = fopen((indexpath+"/counts.bin").c_str(), "wb");
     fwrite(counts, sizeof(uint32_t), nc*(treelen+1)+1, f5);
     fclose (f5);
-
-    // kmeans->save(indexpath);
 }   
 
 void FilterIndex::get_mc_propertiesIndex(){
@@ -178,7 +182,7 @@ void FilterIndex::loadIndex(string indexpath){
     // counts = new uint32_t[nc*(treelen+1)+1]; 
     // maxMC = new uint16_t[3*(treelen+1)*nc]; 
     
-    bliss->load("/scratch/gg29/constrainedANN/LearnedDP/BLISS/indices/siftMode1/model.bin");
+    clusterAlgo->load(indexpath);
 
     FILE* f3 = fopen((indexpath+"/dataNorms.bin").c_str(), "r");
     fread(data_norms, sizeof(float), nb, f3);
@@ -235,7 +239,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     priority_queue<pair<float, uint32_t> > pq;
     uint32_t simid[nc];
     float simv[nc];
-    bliss->score(query, simv);
+    clusterAlgo->getscore(query, simv);
    
     // need argsorted IDs
     iota(simid, simid+nc, 0);

@@ -7,32 +7,32 @@ import sys
 
 natt = 3
 ncon = 27
-results = np.loadtxt("results/Results_sift_3_27_1024Mode1ep50.txt", delimiter=',')
+results = np.loadtxt("results/Results_sift_3_27_1024Mode1Corrected.txt", delimiter=',')
 color=cm.rainbow(np.linspace(0,1,5))
 x = results[:,2]
 y = results[:,3]
-plt.plot(x, y ,color = 'red',marker='o', label="BLISS 1")
+plt.plot(x, y ,color = 'red',marker='o', label="BLISS 1 -ours")
 
 
-results = np.loadtxt("results/Results_sift_3_27_1024Mode2ep50.txt", delimiter=',')
+results = np.loadtxt("results/Results_sift_3_27_1024Mode2Corrected.txt", delimiter=',')
 color=cm.rainbow(np.linspace(0,1,5))
 x = results[:,2]
 y = results[:,3]
-plt.plot(x, y ,color = 'blue',marker='o', label="BLISS 2")
+plt.plot(x, y ,color = 'blue',marker='o', label="BLISS 2 -ours")
 
 
-results = np.loadtxt("results/Results_sift_3_27_1024Mode3ep50.txt", delimiter=',')
+results = np.loadtxt("results/Results_sift_3_27_1024Mode3Corrected.txt", delimiter=',')
 color=cm.rainbow(np.linspace(0,1,5))
 x = results[:,2]
 y = results[:,3]
-plt.plot(x, y ,color = 'green',marker='o', label="BLISS 3")
+plt.plot(x, y ,color = 'green',marker='o', label="BLISS 3 -ours")
 
 
 results = np.loadtxt("results/Results_sift_3_27_1024v2.txt", delimiter=',')
 color=cm.rainbow(np.linspace(0,1,5))
 x = results[:,2]
 y = results[:,3]
-plt.plot(x, y ,color = 'orange',marker='+', label="Kmeans (Prev)")
+plt.plot(x, y ,color = 'orange',marker='+', label="faissKmeans -ours")
 
 
 results = np.loadtxt("../../ResultsNHQ_sift_3_27.txt", delimiter=' ')
@@ -54,7 +54,7 @@ plt.grid(which='major', color='black', linestyle='--')
 # plt.xlim(0,20)
 plt.legend(fontsize=7.5)
 # plt.show()
-plt.savefig('sift_3_'+str(ncon)+'_1024BLISSep50Tuned.png', dpi = 500)
+plt.savefig('sift_3_'+str(ncon)+'_1024BLISSCorrectedTuned.png', dpi = 500)
 
 
 

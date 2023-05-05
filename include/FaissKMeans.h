@@ -14,6 +14,8 @@
 
 using namespace std;
 
+// make a clustering class and inherit it for faiss kmeans and bliss
+
 class Kmeans
 {
     public:
@@ -26,7 +28,7 @@ class Kmeans
             cen_norms = new float[nc]{0};
         }
 
-        void train(float* dataset, int nb){
+        void train(float* dataset, int nb, string modelpath){
             //centroids (nc * d) if centroids are set on input to train, they will be used as initialization
             int v[nb];
             randomShuffle(v , 0, nb);
@@ -55,6 +57,14 @@ class Kmeans
                 } 
                 cen_norms[j] = cen_norms[j]/2;
             }
+
+            FILE* f1 = fopen((modelpath+"/centroids.bin").c_str(), "wb");
+            fwrite(centroids, sizeof(float), nc*d, f1);
+            fclose (f1);
+
+            FILE* f2 = fopen((modelpath+"/centroidsNorms.bin").c_str(), "wb");
+            fwrite(cen_norms, sizeof(float), nc, f2);
+            fclose (f2);
         }
 
         uint32_t top(float* input){
@@ -71,23 +81,22 @@ class Kmeans
             }
             return bin;
         }
-
-        float* score(float* input, float* scores){
+        
+        void getscore(float* input, float* scores){
             for (uint32_t id=0; id<nc; id++){
                 scores[id] = L2SqrSIMD16ExtAVX(input, centroids+id*d, cen_norms[id], d);
             }
-            return scores;
         }
 
-        void save(string indexpath){
-            FILE* f1 = fopen((indexpath+"/centroids.bin").c_str(), "wb");
-            fwrite(centroids, sizeof(float), nc*d, f1);
-            fclose (f1);
+        // void save(string indexpath){
+        //     FILE* f1 = fopen((indexpath+"/centroids.bin").c_str(), "wb");
+        //     fwrite(centroids, sizeof(float), nc*d, f1);
+        //     fclose (f1);
 
-            FILE* f2 = fopen((indexpath+"/centroidsNorms.bin").c_str(), "wb");
-            fwrite(cen_norms, sizeof(float), nc, f2);
-            fclose (f2);
-        }
+        //     FILE* f2 = fopen((indexpath+"/centroidsNorms.bin").c_str(), "wb");
+        //     fwrite(cen_norms, sizeof(float), nc, f2);
+        //     fclose (f2);
+        // }
 
         void load(string indexpath){
             FILE* f1 = fopen((indexpath+"/centroids.bin").c_str(), "rb");

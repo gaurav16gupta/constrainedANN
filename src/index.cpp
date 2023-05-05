@@ -19,8 +19,8 @@ int main(int argc, char** argv)
     else{
         metric="L2";
     }
-    string indexpath = string(argv[1])+ string(argv[2]) + string(argv[3])+ "Mode" + string(argv[4]);
-    string algo = "kmeans"; // or bliss1, bliss2, bliss3
+    string algo = "bliss"; // or bliss1, bliss2, bliss3
+    string indexpath = "indices/" + string(argv[1])+ string(argv[2]) + algo+ "Mode" + string(argv[4]);
 
     cout << "filterIndex running..." << endl;
     size_t d, nb,nc, nq, num_results, buffer_size; 
@@ -29,8 +29,9 @@ int main(int argc, char** argv)
     cout<<properties.size()<<endl;
     cout << "Data files read" << endl;
     nc = atoi(argv[2]); // num clusters
-    FilterIndex myFilterIndex(data, d, nb, nc, properties);
-    myFilterIndex.get_index(metric, indexpath, algo);
+    FilterIndex myFilterIndex(data, d, nb, nc, properties, algo);
+    cout<<"indexpath: "<<indexpath<<endl;
+    myFilterIndex.get_index(metric, indexpath);
     // myFilterIndex.get_cluster_propertiesIndex();
     cout << "Indexed" << endl;
 }

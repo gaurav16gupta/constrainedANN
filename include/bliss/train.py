@@ -11,9 +11,11 @@ from utils import *
 
 # TODO: Identify where the bottleneck is and replace that with C++ function if it is not using the tf library
 
-def trainIndex(lookups_loc, train_data_loc, datasetName, model_save_loc, batch_size, B, vec_dim, hidden_dim, logfile,
+def trainIndex(lookups_loc, train_data_loc, datasetName, model_save_loc, batch_size, B, vec_dim, hidden_dim,
                     r, gpu, gpu_usage, load_epoch, k2, n_epochs, mode, kn):
 
+    assert (B%2==0)
+    B = 2*B
     tf.compat.v1.disable_eager_execution()
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     # get train data
@@ -127,14 +129,13 @@ def trainIndex(lookups_loc, train_data_loc, datasetName, model_save_loc, batch_s
     b1=params[1], 
     W2=params[2], 
     b2=params[3])
-    # keep only top 1024
+
+    # keep only top B/2
     cnt = counts[1:]-counts[:-1]
-    keep  = np.argsort(cnt)[::-1][:1024]
+    keep  = np.argsort(cnt)[::-1][:int(B/2)]
     params[2] = params[2][:,keep]
     params[3] = params[3][keep]
     A1 = np.vstack((params[0], params[1])).T.flatten()
     A2 = np.vstack((params[2], params[3])).T.flatten()
-    np.concatenate([A1, A2]).tofile(model_save_loc+'/r_'+str(r)+'.bin')
+    np.concatenate([A1, A2]).tofile(model_save_loc+'/model.bin')
     del params
-
-
