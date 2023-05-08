@@ -4,6 +4,7 @@ from utils import *
 from config import config
 from binReader import *
 import tensorflow as tf
+import argparse
 
 # add SIFT and other data as well
 def getInvertedIndex(sentencesTokenised):
@@ -122,7 +123,11 @@ def appendVecAtt(train, trainConst):
     return np.column_stack((train, constArray))
 
 if __name__ == "__main__":
-    dataname = '../../../../data/{}/'.format("glove-100")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data", default='sift', type=str)
+    args = parser.parse_args()
+
+    dataname = '{}/'.format(args.data)
     # makeTraindata(dataname, 100)
     makeTraindata_wAttr(dataname, 100)
 

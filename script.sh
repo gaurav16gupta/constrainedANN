@@ -7,10 +7,15 @@
 # for i in { 100, 150, 200, 500, 1000, 2000}; do taskset -c 0 ./query 8192 1000 "$i" | sed -n 9p; done
 # for i in { 100, 150, 200, 500, 1000, 2000}; do taskset -c 0 ./query 16384 1000 "$i" | sed -n 9p; done
 # for i in { 128, 256, 512, 1024, 2048, 4096, 8192, 16384}; do ./index "$i"; done
-echo "Mode1"
-for i in 100 200 300 500 700 1000 1500 2000 3000; do taskset -c 0 ./query sift 1024 3 "$i" 1 | sed -n 7p; done
-echo "Mode2"
-for i in 100 200 300 500 700 1000 1500 2000 3000; do taskset -c 0 ./query sift 1024 3 "$i" 2 | sed -n 7p; done
-echo "Mode3"
-for i in 100 200 300 500 700 1000 1500 2000 3000; do taskset -c 0 ./query sift 1024 3 "$i" 3 | sed -n 7p; done
+# echo "Mode1"
+# for i in 100 200 300 500 700 1000 1500 2000 3000; do taskset -c 0 ./query sift 1024 3 "$i" 1 | sed -n 7p; done
+# echo "Mode2"
+# for i in 100 200 300 500 700 1000 1500 2000 3000; do taskset -c 0 ./query sift 1024 3 "$i" 2 | sed -n 7p; done
+# echo "Mode3"
+# for i in 100 200 300 500 700 1000 1500 2000 3000; do taskset -c 0 ./query sift 1024 3 "$i" 3 | sed -n 7p; done
 
+
+make index
+./index /scratch/gg29/data/sift/base.fvecs /scratch/gg29/data/sift/label_base_3.txt indices/sift1024blissMode1 1024 bliss 1
+make query
+./query /scratch/gg29/data/sift/base.fvecs /scratch/gg29/data/sift/label_base_3.txt /scratch/gg29/data/sift/query.fvecs /scratch/gg29/data/sift/label_query_3.txt indices/sift1024blissMode1 /scratch/gg29/data/sift/label_3_hard_groundtruth.ivecs 1024 bliss 1 500

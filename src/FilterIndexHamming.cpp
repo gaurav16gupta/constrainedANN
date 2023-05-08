@@ -26,23 +26,23 @@ ostream& operator<<(ostream& os, const vector<vector<S>>& matrix){
     return os;
 }
 
-FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_, string algo){
+FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_, string algo, int mode){
     dataset = data; // data
     d =d_; // dim
     nb = nb_; //num data points
     nc = nc_; // num clusters
     treelen = 4; //length of hamming tree, num miniclusters= treelen+1
 
-    // if (algo=="kmeans") {
-        // clusterAlgo = new Kmeans(nc, d);
-    // }
-    // else if (algo=="bliss") {
+    if (algo=="kmeans") {
+        clusterAlgo = new Kmeans(nc, d); //dynamic allocation of object class
+    }
+    else if (algo=="bliss") {
         clusterAlgo = new BLISS(d, 256, nc);
-    //     }
-    // else {
-    //     cout<<"clustering unrecognised. Choosing Faiss-Kmeans as default"<<endl;
-    //     clusterAlgo = new Kmeans(nc, d);
-    // }
+        }
+    else {
+        cout<<"clustering unrecognised. Choosing Faiss-Kmeans as default"<<endl;
+        clusterAlgo= new Kmeans(nc, d);
+    }
     properties.resize(nb);
     uint16_t cnt=0;
     for (int i=0; i<nb; i++){
@@ -67,14 +67,14 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
 }
 
 //NN index
-void FilterIndex::get_index(string metric, string indexpath){
-    // centroids = new float[d*nc]; //provide random nc vectors
-    // cen_norms = new float[nc]{0};
+void FilterIndex::get_index(string metric, string indexpath, int mode){
+    //to save index files
+    mkdir(indexpath.c_str(), 0777);
     data_norms = new float[nb]{0};
     Lookup= new uint32_t[nb];
     counts = new uint32_t[nc+1]{0};
 
-    clusterAlgo->train(dataset, nb, indexpath);
+    clusterAlgo->train(dataset, nb, indexpath); //take the properties for Mode 3 bliss
     for(uint32_t j = 0; j < nb; ++j){  
         for(uint32_t k = 0; k < d; ++k) {    
             data_norms[j]=0;             
@@ -84,7 +84,6 @@ void FilterIndex::get_index(string metric, string indexpath){
     }
     
     uint32_t* invLookup = new uint32_t[nb];
-    // this needs to be integrated in clustering, use openmp, use Strassen algorithm for matmul*
     //get best score cluster
     #pragma omp parallel for  
     for(uint32_t i = 0; i < nb; ++i) {  
@@ -101,9 +100,6 @@ void FilterIndex::get_index(string metric, string indexpath){
     iota(Lookup, Lookup+nb, 0);
     stable_sort(Lookup, Lookup+nb, [&invLookup](size_t i1, size_t i2) {return invLookup[i1] < invLookup[i2];});
     // get_mc_propertiesIndex(); // this will change counts, Lookup; and add maxMC tree
-
-    //save index files
-    mkdir(indexpath.c_str(), 0777);
     
     FILE* f3 = fopen((indexpath+"/dataNorms.bin").c_str(), "wb");
     fwrite(data_norms, sizeof(float), nb, f3);
@@ -181,20 +177,14 @@ void FilterIndex::loadIndex(string indexpath){
     counts = new uint32_t[nc+1]; 
     // counts = new uint32_t[nc*(treelen+1)+1]; 
     // maxMC = new uint16_t[3*(treelen+1)*nc]; 
-    
+    cout<<indexpath<<endl;
     clusterAlgo->load(indexpath);
-
     FILE* f3 = fopen((indexpath+"/dataNorms.bin").c_str(), "r");
     fread(data_norms, sizeof(float), nb, f3);
     FILE* f4 = fopen((indexpath+"/Lookup.bin").c_str(), "r");
     fread(Lookup, sizeof(uint32_t), nb, f4);
     FILE* f5 = fopen((indexpath+"/counts.bin").c_str(), "r");
     fread(counts, sizeof(uint32_t), nc+1, f5);
-
-    // FILE* f5 = fopen((indexpath+"/counts.bin").c_str(), "r");
-    // fread(counts, sizeof(uint32_t), nc*(treelen+1)+1, f5);
-    // FILE* f6 = fopen((indexpath+"/maxMC.bin").c_str(), "r");
-    // fwrite(maxMC, sizeof(uint16_t), nc*(treelen+1)*3, f6);
     get_mc_propertiesIndex();
     //this changes Lookup
     for (int i =0; i< nc*(treelen+1); i++){
@@ -214,7 +204,6 @@ void FilterIndex::loadIndex(string indexpath){
         data_norms_reordered[i] = data_norms[Lookup[i]];
         memcpy(properties_reordered+ i*numAttr, properties[Lookup[i]].data(), sizeof(*properties_reordered) * numAttr);
     }
-    // cout<<properties_reordered;
     delete dataset;
 }
 
@@ -251,27 +240,27 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
 
     float sim;
     float a=0,b=0;
-    // t1 = chrono::high_resolution_clock::now();
+    t1 = chrono::high_resolution_clock::now();
     while(seen<max_num_distances && seenbin<nc){ 
         uint32_t bin = simid[seenbin];
-        seenbin++;
+        seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
         int id = bin*(treelen+1);
         bin = bin*(treelen+1);
         //get which disjoint part of the cluster query belongs to
         uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
         bin = bin+membership;
         for (int i =counts[bin]; i< counts[bin+1] && seen<max_num_distances; i++){
-            // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2);
+            // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2); software prefect is not very useful here
             //check if constraint statisfies
             int j =0;
-            while (j<numAttr && properties_reordered[i*numAttr +j]== props[j]) j++;
+            while (j<numAttr && properties_reordered[i*numAttr +j]== props[j]) j++; // plus the number of empty attrs X
             if (j==numAttr){
                 Candidates[seen]=i; 
                 seen++;
             }
         }
     }
-    // t2 = chrono::high_resolution_clock::now();
+    t2 = chrono::high_resolution_clock::now();
     if (seen<num_results+1){
         for (int i =0; i< seen; i++){ 
             neighbor_set[qnum*num_results+ i] = Lookup[Candidates[i]];
@@ -288,5 +277,11 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
             Candidates_pq.pop();
         }
     }
+    t3 = chrono::high_resolution_clock::now();
     // cout<<"time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()<<" ";
+    // cout<<"time: "<<chrono::duration_cast<chrono::nanoseconds>(t3 - t2).count()<<endl;
+
 }
+
+// TODO
+// 1) change dtype of the properties (uint16_t/uint32_t/uint8_t), based on the vocab size

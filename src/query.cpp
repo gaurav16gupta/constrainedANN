@@ -6,33 +6,21 @@
 
 int main(int argc, char** argv)
 {
-    if (argc != 6){
-        std::cout << argv[0] << " dataname num_clusters numAttribites buffer_size mode"<< std::endl;
-        exit(-1);
-    }
-    string algo = "bliss"; // or bliss1, bliss2, bliss3
+    //default
+    string metric = "L2";
+    int mode = 0;
+    string algo ="kmeans";
+    size_t nc =0;
+    size_t buffer_size =0;
 
-    string datapath = DATAPATH + string(argv[1]) + "/base.fvecs"; 
-    string Attripath = DATAPATH + string(argv[1]) + "/label_base_"+string(argv[3])+".txt"; 
-    string querypath = DATAPATH + string(argv[1]) + "/query.fvecs"; 
-    string queryAttripath = DATAPATH + string(argv[1]) + "/label_query_"+string(argv[3])+".txt"; 
-    string GTpath = DATAPATH + string(argv[1]) + "/label_"+string(argv[3])+"_hard_groundtruth.ivecs"; 
-    string indexpath = "indices/"+ string(argv[1])+ string(argv[2]) +algo+ "Mode" + string(argv[5]) ;
-    cout<<indexpath<<endl;
-    string metric;
-    if (string(argv[1])=="sift"){
-        metric="L2";}
-    if (string(argv[1])=="glove"){
-        metric="Angular";}
-    else{
-        metric="L2";
-    }
+    size_t d, nb, nq, num_results; 
+    string datapath, Attripath, querypath, queryAttripath, indexpath, GTpath;
+    int success = argparser(argc, argv, &datapath, &Attripath, &querypath, &queryAttripath, &indexpath, &GTpath, &nc, &algo, &mode, &buffer_size);
 
-    size_t d, nb,nc, nq, num_results, buffer_size; 
     float* data = fvecs_read(datapath.c_str(), &d, &nb);
     vector<vector<string>> properties = getproperties(Attripath,' ');
-    nc = atoi(argv[2]); // num clusters
-    FilterIndex myFilterIndex(data, d, nb, nc, properties, algo);
+    // nc = atoi(argv[2]); // num clusters
+    FilterIndex myFilterIndex(data, d, nb, nc, properties, algo, mode);
     myFilterIndex.loadIndex(indexpath);
     cout << "Loaded" << endl;
 
@@ -41,7 +29,7 @@ int main(int argc, char** argv)
     int* queryGTlabel = ivecs_read(GTpath.c_str(), &num_results, &nq);
     cout << "Query files read..." << endl;
     nq = 10000;
-    buffer_size = atoi(argv[4]);
+    // buffer_size = atoi(argv[4]);
 
     chrono::time_point<chrono::high_resolution_clock> t1, t2;
     t1 = chrono::high_resolution_clock::now();

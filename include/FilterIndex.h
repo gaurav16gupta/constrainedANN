@@ -6,7 +6,6 @@
 #include <vector>
 #include <set>
 #include <iterator>
-#include "FaissKMeans.h"
 #include <stdlib.h>     
 #include <numeric>
 #include <algorithm>
@@ -19,16 +18,17 @@
 #include "faiss/AutoTune.h"
 #include "faiss/index_factory.h"
 #include "faiss/index_io.h"
-#include "FaissKMeans.h"
-#include "BLISS.h"
+// #include "FaissKMeans.h"
+// #include "BLISS.h"
+#include "cluster.h"
 
 using namespace std;
 
 class FilterIndex
 {
     public:
-        FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_, string algo);
-        void get_index(string metric, string indexpath);
+        FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_, string algo, int mode);
+        void get_index(string metric, string indexpath, int mode);
         void get_cluster_propertiesIndex();
 
         void loadIndex(string indexpath);
@@ -51,15 +51,10 @@ class FilterIndex
         int treelen;
         int numAttr;
 
-        // if (algo=="kmeans") Kmeans* clusterAlgo ;
-        // else if (algo=="bliss") BLISS* clusterAlgo;
-        // else {
-        //     cout<<"clustering unrecognised. Choosing Faiss-Kmeans as default"<<endl;
-        //     Kmeans* clusterAlgo ;
-        // }
-
-        // Kmeans* clusterAlgo;
-        BLISS* clusterAlgo;
+        // Kmeans kmeans;
+        // BLISS bliss;
+        // unique_ptr<cluster> clusterAlgo;
+        cluster* clusterAlgo; // parent class
         unordered_map<uint16_t, uint16_t>PrpAtrMap;
         vector<vector<uint16_t>>properties;
         uint16_t* properties_reordered;
