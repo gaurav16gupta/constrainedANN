@@ -1,10 +1,10 @@
 import numpy as np
 import h5py
 from utils import *
-from config import config
 from binReader import *
 import tensorflow as tf
 import argparse
+import multiprocessing as mp
 
 # add SIFT and other data as well
 def getInvertedIndex(sentencesTokenised):
@@ -26,9 +26,9 @@ def intersection(lst1, lst2):
 
 def makeTraindata(dataname, K):
     x_train, trainConst = loaddata(dataname)
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '3'
     begin_time = time.time()
-    batch_size = 1000
+    batch_size = 500
     output = np.zeros([x_train.shape[0], K], dtype=np.int32) # for upto 2B
 
     #L2 metric
@@ -42,7 +42,7 @@ def makeTraindata(dataname, K):
         # sim = 2*x_batch@W - W_norm
         sim = 2*tf.matmul(x_batch,W)- W_norm
         # top_idxs = np.argpartition(sim, -K)[:,-K:]
-        top_idxs = tf.nn.top_k(sim, k=K, sorted=False)[1]
+        top_idxs = tf.nn.top_k(sim, k=K, sorted=True)[1]
         output[start_idx:end_idx] = top_idxs
 
     N,d = output.shape
@@ -68,14 +68,39 @@ def makeTraindata_wAttr(dataname, K):
     largest_indices = []
     print ("starting")
     print (time.time())
-    #can do batch wise with tensorflow
+
+    # def process_chunk(chunk):
+    #     result = []
+    #     for i in chunk:
+    #         candidates = Invbins[trainConst[i]]
+    #         candidates = np.array(candidates)
+    #         dist = (-train[candidates, :]@train[i] +norms[candidates])
+    #         if len(dist)>K:
+    #             temp = np.argpartition(dist, K)[:K]
+    #             temp = temp[np.argsort(dist[temp])]
+    #         else:
+    #             temp = np.argsort(dist)
+    #             temp = np.append(temp,-np.ones(K-len(temp),dtype=np.dtype(temp[0])))
+    #         assert len(temp)==K
+    #         result.append(candidates[temp])
+    #     return result
+    # num_processes = 32
+    # chunk_size = int(nt/num_processes)
+    # pool = mp.Pool(processes=num_processes)
+    # chunks = [range(i*chunk_size, (i+1)*chunk_size) for i in range(num_processes-1)]
+    # chunks.append(range((num_processes-1)*chunk_size, nt))
+    # results = []
+    # for chunk in tqdm(chunks):
+    #     result = pool.apply_async(process_chunk, args=(chunk,))
+    #     results.append(result)
+    # # largest_indices = []
+    # for result in results:
+    #     largest_indices.extend(result.get())
+    # pool.close()
+    # pool.join()
+
     for i in tqdm(range(0, nt)):
-        # try:
-        # a = [Invbins[key] for key in trainConst[i]]
         candidates = Invbins[trainConst[i]]
-        # candidates = a[0]
-        # for k in range(1,len(a)):
-        #     candidates = intersection(candidates,a[k])
         candidates = np.array(candidates)
         dist = (-train[candidates, :]@train[i] +norms[candidates])
         if len(dist)>K:
@@ -86,12 +111,12 @@ def makeTraindata_wAttr(dataname, K):
             temp = np.append(temp,-np.ones(K-len(temp),dtype=np.dtype(temp[0])))
         assert len(temp)==K
         largest_indices.append(candidates[temp]) # to verify this
-        
     print (len(largest_indices), nt)
     a = np.array(largest_indices).astype('int32')
     N,d = a.shape
     a = np.column_stack((d*np.ones(N, dtype='int32'),a)).flatten()
     a.tofile(dataname+"/BLISS_train_3_groundtruth.ivecs")
+
 
 # get data and properties
 def loaddata(dataname):
@@ -128,7 +153,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dataname = '{}/'.format(args.data)
-    # makeTraindata(dataname, 100)
+    makeTraindata(dataname, 100)
     makeTraindata_wAttr(dataname, 100)
-
-

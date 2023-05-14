@@ -18,8 +18,12 @@ int main(int argc, char** argv)
     float* data = fvecs_read(basepath.c_str(), &d, &nb);
     vector<vector<string>> properties = getproperties(labelpath,' ');
     cout << "Data files read" << endl;
+    chrono::time_point<chrono::high_resolution_clock> t1, t2;
+    t1 = chrono::high_resolution_clock::now();
     FilterIndex myFilterIndex(data, d, nb, nc, properties, algo, mode);
     myFilterIndex.get_index(metric, indexpath, mode);
+    t2 = chrono::high_resolution_clock::now();
+    cout<<"Index time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()<<endl;
     cout << "Indexed at: " << indexpath << endl;
     return 0;
 }

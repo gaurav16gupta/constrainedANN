@@ -44,7 +44,7 @@ class BLISS : public cluster{
         void getscore(float* input, float* last){
             float* hd = new float[s2];
             for (uint32_t id=0; id<s2; id++){
-                hd[id] = IPSIMD16ExtAVX(input, weights+ id*(s1+1), s1);
+                hd[id] = IPSIMD4ExtAVX(input, weights+ id*(s1+1), s1);
                 hd[id] += *(weights+ id*(s1+1) +s1); //bias
                 if (hd[id]<0) hd[id] =0; // Relu 0 if negative
             }
@@ -52,7 +52,7 @@ class BLISS : public cluster{
 
             for (uint32_t id=0; id<s3; id++){
                 float temp =0;
-                last[id] = IPSIMD16ExtAVX(hd, L1+ id*(s2+1), s2); //multiply
+                last[id] = IPSIMD4ExtAVX(hd, L1+ id*(s2+1), s2); //multiply
                 last[id] += *(L1+ id*(s2+1) +s2); //bias
             }
             // last = softmax(last);
@@ -61,7 +61,7 @@ class BLISS : public cluster{
         uint32_t top(float* input){ 
             float* hd = new float[s2];
             for (uint32_t id=0; id<s2; id++){
-                hd[id] = IPSIMD16ExtAVX(input, weights+ id*(s1+1), s1);
+                hd[id] = IPSIMD4ExtAVX(input, weights+ id*(s1+1), s1);
                 hd[id] += *(weights+ id*(s1+1) +s1); //bias
                 if (hd[id]<0) hd[id] =0; // Relu 0 if negative
             }
@@ -70,7 +70,7 @@ class BLISS : public cluster{
             float maxscore = -1000000; 
             for (uint32_t id=0; id<s3; id++){
                 float temp =0;
-                temp = IPSIMD16ExtAVX(hd, L1+ id*(s2+1), s2); //multiply
+                temp = IPSIMD4ExtAVX(hd, L1+ id*(s2+1), s2); //multiply
                 temp += *(L1+ id*(s2+1) +s2); //bias
                 if (temp>maxscore) {
                 maxscore=temp;
@@ -154,7 +154,7 @@ class Kmeans: public cluster{
         
         void getscore(float* input, float* scores){
             for (uint32_t id=0; id<nc; id++){
-                scores[id] = L2SqrSIMD16ExtAVX(input, centroids+id*d, cen_norms[id], d);
+                scores[id] = L2SIMD4ExtAVX(input, centroids+id*d, cen_norms[id], d);
             }
         }
         

@@ -32,21 +32,18 @@
 using namespace std;
 int argparser(int argc, char** argv, string* basepath, string* labelpath, string* indexpath, size_t* nc, string* algo, int* mode);
 int argparser(int argc, char** argv, string* basepath, string* labelpath, string* querypath, string* queryAttripath, string* indexpath, string* GTpath, size_t* nc, string* algo, int* mode, size_t* buffer_size);
-
 double computeRecall(vector<vector<int>> answer, vector<vector<int>> guess);
-vector<vector<int>> computeGroundTruth(vector<vector<int>> queryset, vector<set<string>> queryprops, vector<vector<int>> data, vector<set<string>> properties, int num_results);
-vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, vector<uint32_t> idx, uint32_t idxSize, uint32_t k, vector<float> topkDist);
-float L2sim(float* a, float* b, float norm_bsq, size_t d);
-float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty);
+
 float IP(float* a, float* b, size_t d);
-float IPSIMD16ExtAVX(float *pVect1, float *pVect2, size_t qty);
+double L2sim(float* a, float* b, float norm_bsq, size_t d);
+double L2Square(float* a, float* b, size_t d);
+double L2normSquare(float* a, size_t d);
+
+float IPSIMD4ExtAVX(float *pVect1, float *pVect2, size_t qty);
+float L2SIMD4ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty);
+// to add AVXSIMD16 and SSE as well
 uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen);
 bool not_in(uint16_t x, uint16_t* a, int h);
-
 double RecallAtK(int* answer, int* guess, size_t k, size_t nq);
-
-vector<int> argsort(int * query, int length);
-vector<int> vectorArgsort(vector<double> query);
-
 void randomShuffle(int* v , int l, int u);
-
+vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, vector<uint32_t> idx, uint32_t idxSize, uint32_t k, vector<float> topkDist);

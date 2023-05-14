@@ -76,8 +76,8 @@ void FilterIndex::get_index(string metric, string indexpath, int mode){
 
     clusterAlgo->train(dataset, nb, indexpath); //take the properties for Mode 3 bliss
     for(uint32_t j = 0; j < nb; ++j){  
-        for(uint32_t k = 0; k < d; ++k) {    
-            data_norms[j]=0;             
+        data_norms[j]=0;  //was a bug here, now removed         
+        for(uint32_t k = 0; k < d; ++k) {   
             data_norms[j] += dataset[j*d +k]*dataset[j*d +k];        
         } 
         data_norms[j]=data_norms[j]/2;
@@ -204,13 +204,14 @@ void FilterIndex::loadIndex(string indexpath){
         data_norms_reordered[i] = data_norms[Lookup[i]];
         memcpy(properties_reordered+ i*numAttr, properties[Lookup[i]].data(), sizeof(*properties_reordered) * numAttr);
     }
-    delete dataset;
+    // delete dataset;
 }
 
 void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances){
     neighbor_set = new int32_t[nq*num_results]{-1};
     cout<<"num queries: "<<nq<<endl;
     for (size_t i = 0; i < nq; i++){
+        // cout<<i<<endl;
         findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances, i);
     }
 }
@@ -234,10 +235,9 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     iota(simid, simid+nc, 0);
     stable_sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
     priority_queue<pair<float, uint32_t> > Candidates_pq;
-    uint32_t Candidates[max_num_distances];
-    float score[max_num_distances];
+    uint32_t* Candidates = new uint32_t[max_num_distances];
+    float* score = new float[max_num_distances];
     int seen=0, seenbin=0;
-
     float sim;
     float a=0,b=0;
     t1 = chrono::high_resolution_clock::now();
@@ -249,6 +249,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         //get which disjoint part of the cluster query belongs to
         uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
         bin = bin+membership;
+        
         for (int i =counts[bin]; i< counts[bin+1] && seen<max_num_distances; i++){
             // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2); software prefect is not very useful here
             //check if constraint statisfies
@@ -269,7 +270,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     else{
         for (int i =0; i< seen; i++){ 
             //  __builtin_prefetch (dataset_reordered +Candidates[i+1]*d, 0, 2);
-            score[i] = L2SqrSIMD16ExtAVX(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
+            score[i] = L2SIMD4ExtAVX(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
             Candidates_pq.push({score[i], Lookup[Candidates[i]]});
         }
         for (int i =0; i< min(seen,num_results); i++){ 
@@ -285,3 +286,34 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
 
 // TODO
 // 1) change dtype of the properties (uint16_t/uint32_t/uint8_t), based on the vocab size
+
+//debug
+        // for (int p=0;p<nb;p++){
+        //     if (Lookup[p]==57891){
+        //         cout<<Stprops<<endl;
+        //         for (int u= 0;u<numAttr;u++){
+        //             cout<<properties_reordered[p*numAttr +u]<<" ";
+        //         }
+        //         cout<<endl;
+        //         for (int u= 0;u<numAttr;u++){
+        //             cout<<props[u]<<" ";
+        //         }
+        //         cout<<endl;
+        //     }
+        // }
+        // string g;
+        // cin>>g;
+        //
+        // score[i] = L2sim(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
+        // score[i] = -L2dist(query, dataset_reordered +Candidates[i]*d, d);
+
+        // if ( Lookup[Candidates[i]]==57891){
+        //     cout<<score[i]<<endl;
+        //     cout<<scoresimd<<endl;
+        //     cout<<"data norm/2 "<<data_norms_reordered[Candidates[i]]<<endl;
+        //     cout<<"aSq "<<L2norm(query, d) <<endl;
+        //     cout<<"bSq "<<L2norm(dataset_reordered +Candidates[i]*d, d) <<endl;
+        //     cout<<"ip "<< IP(query, dataset_reordered +Candidates[i]*d, d)<<endl;
+
+        //     cout<<L2dist(query, dataset_reordered +Candidates[i]*d, d)<<endl;
+        // }

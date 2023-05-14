@@ -3,8 +3,6 @@ import argparse
 import time
 import os
 import numpy as np
-import logging
-import pdb
 from binReader import *
 from dataPrepare_constrained import *
 from utils import *
@@ -47,9 +45,9 @@ def trainIndex(lookups_loc, train_data_loc, datasetName, model_save_loc, batch_s
     ###############
     if not os.path.exists(lookups_loc+'epoch_'+str(load_epoch)+'/'):  
         os.makedirs(lookups_loc+'epoch_'+str(load_epoch)+'/')
-    # create_universal_lookups(r, B, N, lookups_loc+'epoch_'+str(load_epoch)+'/')
-    randomPoints_lookups(r, B, N, x_train, lookups_loc+'epoch_'+str(load_epoch)+'/')
-
+    create_universal_lookups(r, B, N, lookups_loc+'epoch_'+str(load_epoch)+'/')
+    # randomPoints_lookups(r, B, N, x_train, lookups_loc+'epoch_'+str(load_epoch)+'/')
+    
     lookup = tf.Variable(np.load(lookups_loc+'epoch_'+str(load_epoch)+'/bucket_order_'+str(r)+'.npy')[:N])
     ###############
     temp = tf.constant(np.arange(batch_size*kn)//kn)

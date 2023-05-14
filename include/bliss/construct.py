@@ -32,9 +32,9 @@ dtype = config.DATASET[datasetName]['dt']
 #     os.makedirs("../logs/{}".format(datasetName))
 
 mode = args.mode
-lookups_loc  = "../../indices/{}/".format(datasetName+"Mode"+str(mode))
-train_data_loc = "../../../../../data/{}/".format(datasetName)
-model_save_loc = "../../indices/{}/".format(datasetName+str(B)+"blissMode"+str(mode))
+lookups_loc  = "indices/{}/".format(datasetName+"blissMode"+str(mode))
+train_data_loc = "/scratch/gg29/data/{}/".format(datasetName)
+model_save_loc = lookups_loc
 batch_size = 5000
 hidden_dim = args.hdim #512 initially, should be an argumment, observation lower numbers like 4-16 are best
 # logfile = "../logs/{}/".format(datasetName)

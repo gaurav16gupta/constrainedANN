@@ -30,33 +30,6 @@ int argparser(int argc, char** argv, string* basepath, string* labelpath, string
     *nc = std::atoi(argv[4]);
     *algo = std::string(argv[5]);
     *mode = std::atoi(argv[6]);
-
-    // for (int i = 0; i < argc; ++i){
-    //     if (std::strcmp("--Nc",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *nc = std::atoi(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --Nc"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    //     if (std::strcmp("--Algo",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *algo = std::string(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --Algo"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    //     if (std::strcmp("--mode",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *mode = std::atoi(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --mode"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    // }
     return 0;
 }
 int argparser(int argc, char** argv, string* basepath, string* labelpath, string* querypath, string* queryAttripath, string* indexpath, string* GTpath, size_t* nc, string* algo, int* mode, size_t* buffer_size){
@@ -93,44 +66,8 @@ int argparser(int argc, char** argv, string* basepath, string* labelpath, string
     *algo = std::string(argv[8]);
     *mode = std::atoi(argv[9]);
     *buffer_size = std::atoi(argv[10]);
-
-    // for (int i = 0; i < argc; ++i){
-    //     if (std::strcmp("--Nc",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *nc = std::atoi(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --Nc"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    //     if (std::strcmp("--Algo",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *algo = std::string(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --Algo"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    //     if (std::strcmp("--mode",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *mode = std::atoi(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --mode"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    //     if (std::strcmp("--Bf",argv[i]) == 0){
-    //         if ((i+1) < argc){
-    //             *buffer_size = std::atoi(argv[i+1]);
-    //         } else {
-    //             std::cerr<<"Invalid argument for optional parameter --Bf"<<std::endl; 
-    //             return -1;
-    //         }
-    //     }
-    // }
     return 0;
 }
-
 
 double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
     uint32_t count = 0;
@@ -146,36 +83,6 @@ double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
     return (count/double(nq*k));
 }
 
-float L2sim(float* a, float* b, float norm_bsq, size_t d){
-    float dist=0;
-    for(uint32_t k = 0; k < d; ++k) {    
-        dist += a[k]*b[k]; // one unit FLOP- mul
-        // dist += pow(a[k]-b[k],2); // two units FLOPS- mul and sub
-    } 
-    dist= dist- norm_bsq;
-    return dist;
-}
-
-// Not giving speedup!! Check the issue
-float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
-    float PORTABLE_ALIGN32 TmpRes[8];
-
-    size_t qty16 = qty / 16;
-    const float *pEnd1 = pVect1 + 16 * qty16;
-    __m256 sum256 = _mm256_set1_ps(0);
-    while (pVect1 < pEnd1) {
-        //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
-        const __m256 v1 = _mm256_loadu_ps(pVect1);
-        pVect1 += 8;
-        const __m256 v2 = _mm256_loadu_ps(pVect2);
-        pVect2 += 8;
-        sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
-    }
-    _mm256_store_ps(TmpRes, sum256);
-    float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] - norm_bsq;
-    return sum;
-}
-
 float IP(float* a, float* b, size_t d){
     float ip=0;
     for(uint32_t k = 0; k < d; ++k) {    
@@ -183,24 +90,66 @@ float IP(float* a, float* b, size_t d){
     } 
     return ip;
 }
-        
-float IPSIMD16ExtAVX(float *pVect1, float *pVect2, size_t qty) {
+
+double L2sim(float* a, float* b, float norm_bsq, size_t d){
+    return (IP(a, b, d) -norm_bsq);
+}
+
+double L2Square(float* a, float* b, size_t d){
+    double dist=0;
+    for(uint32_t k = 0; k < d; ++k) {    
+        dist += pow(a[k]-b[k],2); // two units FLOPS- mul and sub
+    } 
+    return dist;
+}
+
+double L2normSquare(float* a, size_t d){
+    double norm=0;
+    for(uint32_t k = 0; k < d; ++k) {    
+        norm += a[k]*a[k]; // two units FLOPS- mul and sub
+    } 
+    return norm;
+}
+
+float IPSIMD4ExtAVX(float *pVect1, float *pVect2, size_t qty) {
     float PORTABLE_ALIGN32 TmpRes[8];
     size_t qty16 = qty / 16;
+    size_t qty4 = qty / 4;
     const float *pEnd1 = pVect1 + 16 * qty16;
+    const float *pEnd2 = pVect1 + 4 * qty4;
     __m256 sum256 = _mm256_set1_ps(0);
     while (pVect1 < pEnd1) {
         //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
-        const __m256 v1 = _mm256_loadu_ps(pVect1);
+        __m256 v1 = _mm256_loadu_ps(pVect1);
         pVect1 += 8;
-        const __m256 v2 = _mm256_loadu_ps(pVect2);
+        __m256 v2 = _mm256_loadu_ps(pVect2);
+        pVect2 += 8;
+        sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
+
+        v1 = _mm256_loadu_ps(pVect1);
+        pVect1 += 8;
+        v2 = _mm256_loadu_ps(pVect2);
         pVect2 += 8;
         sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
     }
-    _mm256_store_ps(TmpRes, sum256);
-    float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7];
-    return sum;
+
+    __m128 v1, v2;
+    __m128 sum_prod = _mm_add_ps(_mm256_extractf128_ps(sum256, 0), _mm256_extractf128_ps(sum256, 1));
+    while (pVect1 < pEnd2) {
+        v1 = _mm_loadu_ps(pVect1);
+        pVect1 += 4;
+        v2 = _mm_loadu_ps(pVect2);
+        pVect2 += 4;
+        sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(v1, v2));
+    }
+    _mm_store_ps(TmpRes, sum_prod);
+    return TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3];
 }
+
+float L2SIMD4ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
+    return (IPSIMD4ExtAVX(pVect1, pVect2, qty) -norm_bsq);
+}
+
 
 uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen){
     // maxMC: property location, property, frequency
@@ -288,188 +237,3 @@ vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, v
     }
     return topk;
 }
-
-//-----------------Unused functions--------------------------------------------------------------------------------------------------------------------------------
-
-
-   // //check for logical errors
-    // for (int i =counts[10]; i< counts[11]; i++){
-    //     cout<<Lookup[i]<<" ";
-    // }
-    // cout<<endl;
-    // for (int clID = 11; clID < 12; clID++){
-    //     cout<<counts[clID]-counts[clID-1]<<endl; 
-    // }
-
-       // //check for logical errors
-    // for (int clID = 10; clID < 11; clID++){
-    //     for (int j=0; j< treelen+1; j++){
-    //         int id = clID*(treelen+1) +j;
-    //         cout<<maxMCIDs[id]<<endl;
-    //         // for (int i =counts[j]; i< counts[j+1]; i++){
-    //         //     cout<<Lookup[i]<<" ";}
-    //         //     cout<<endl;
-    //     }
-    //     cout<<endl;
-    // }
-
-vector<int> argsort(int * query, int length)
-{
-    //A helper function to find the top num_results args in the coords closest to query
-    //O(nk)
-    vector<tuple<int, int>> sorted;
-    for (int x = 0; x < length; x ++)
-    {
-        sorted.push_back({x, -1.0});
-    }
-    for (int index = 0; index < length; index++)
-    {
-        for (int order = 0; order < length; order++)
-        {
-            if (query[index] < get<1>(sorted.at(order)) || get<1>(sorted.at(order)) < 0)
-            {
-                sorted.insert(sorted.begin() + order, {index, query[index]});
-                sorted.pop_back();
-                break;
-            }
-        }
-    }
-    vector<int> nearest_neighbors;
-    for (int index = 0; index < length; index++)
-    {
-        nearest_neighbors.push_back(get<0>(sorted.at(index)));
-    }
-    return nearest_neighbors;
-}
-
-vector<int> vectorArgsort(vector<double> query)
-{
-    //A helper function to find the top num_results args in the coords closest to query
-    //O(nk)
-    vector<tuple<int, double>> sorted;
-    for (size_t x = 0; x < query.size(); x ++)
-    {
-        sorted.push_back({x, -1.0});
-    }
-    for (size_t index = 0; index < query.size(); index++)
-    {
-        for (size_t order = 0; order < query.size(); order++)
-        {
-            if (query[index] < get<1>(sorted.at(order)) || get<1>(sorted.at(order)) < 0)
-            {
-                sorted.insert(sorted.begin() + order, {index, query[index]});
-                sorted.pop_back();
-                break;
-            }
-        }
-    }
-    vector<int> nearest_neighbors;
-    for (size_t index = 0; index < query.size(); index++)
-    {
-        nearest_neighbors.push_back(get<0>(sorted.at(index)));
-    }
-    return nearest_neighbors;
-}
-
-
-// save a load multiple vectors into the same bin file----
-// bool save(const char * filename){
-//     std::ofstream out(filename, std::ios::binary);
-//     int a=A.size(), b=B.size(), c=C.size(), d=D.size(), e=E.size(), f=F.size();
-//     out.write(reinterpret_cast<const char*>(&a), sizeof(a));
-//     out.write(reinterpret_cast<const char*>(&b), sizeof(b));
-//     out.write(reinterpret_cast<const char*>(&c), sizeof(c));
-//     out.write(reinterpret_cast<const char*>(&d), sizeof(d));
-//     out.write(reinterpret_cast<const char*>(&e), sizeof(e));
-//     out.write(reinterpret_cast<const char*>(&f), sizeof(f));
-
-//     out.write(reinterpret_cast<const char*>(&A[0]), sizeof(int)*A.size());
-//     out.write(reinterpret_cast<const char*>(&B[0]), sizeof(int)*B.size());
-//     out.write(reinterpret_cast<const char*>(&C[0]), sizeof(int)*C.size());
-//     out.write(reinterpret_cast<const char*>(&D[0]), sizeof(int)*D.size());
-//     out.write(reinterpret_cast<const char*>(&E[0]), sizeof(int)*E.size());
-//     out.write(reinterpret_cast<const char*>(&F[0]), sizeof(int)*F.size());
-
-//     // always check to see if the file opened, and if writes succeeded.  
-//     // I am being lazy here so I can focus on the actual question
-//     return true;
-// }
-
-// bool load(const char *filename){
-//     std::ifstream in(filename, std::ios::binary);
-//     int a, b, c, d, e, f;
-//     in.read(reinterpret_cast<char*>(&a), sizeof(a));
-//     in.read(reinterpret_cast<char*>(&b), sizeof(b));
-//     in.read(reinterpret_cast<char*>(&c), sizeof(c));
-//     in.read(reinterpret_cast<char*>(&d), sizeof(d));
-//     in.read(reinterpret_cast<char*>(&e), sizeof(e));
-//     in.read(reinterpret_cast<char*>(&f), sizeof(f));
-//     A.resize(a); B.resize(b); C.resize(c); D.resize(d); E.resize(e); F.resize(f);
-
-//     in.read(reinterpret_cast<char*>(&A[0]), sizeof(int)*A.size());
-//     in.read(reinterpret_cast<char*>(&B[0]), sizeof(int)*B.size());
-//     in.read(reinterpret_cast<char*>(&C[0]), sizeof(int)*C.size());
-//     in.read(reinterpret_cast<char*>(&D[0]), sizeof(int)*D.size());
-//     in.read(reinterpret_cast<char*>(&E[0]), sizeof(int)*E.size());
-//     in.read(reinterpret_cast<char*>(&F[0]), sizeof(int)*F.size());
-
-//     // always check to see if the file opened, and if writes succeeded.  
-//     // I am being lazy here so I can focus on the actual question
-//     return true;
-// }
-
-
-
-// vector<vector<int>> computeGroundTruth(vector<vector<int>> queryset, vector<set<string>> queryprops, vector<vector<int>> data, vector<set<string>> properties, int num_results)
-// {
-//     vector<vector<int>> answers;
-//     for (int x = 0; x < queryset.size(); x++)
-//     {
-//         vector<int> answer;
-//         set<string> props = queryprops[x];
-//         vector<int> validIDs;
-//         for (int y = 0; y < properties.size(); y++)
-//         {
-//             bool valid = true;
-//             for (auto property : props)
-//             {
-//                 if (!properties[y].count(property))
-//                 {
-//                     valid = false;
-//                 }
-//             }
-//             if (valid)
-//             {
-//                 validIDs.push_back(y);
-//             }
-//         }
-//         cout << "num validIDs: " << validIDs.size() << endl;
-
-//         vector<vector<int>> validCoords;
-//         for (int a = 0; a < validIDs.size(); a++)
-//         {
-//             validCoords.push_back(data[validIDs[a]]);
-//         }
-
-//         cout << "num validCoords: " << validCoords.size() << endl;
-        
-//         vector<uint32_t> topArgs = argTopK(queryset[x], validCoords, num_results);
-
-//         vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, vector<uint32_t> idx, uint32_t idxSize, int k, float* topkDist){
-
-
-//         cout << "topArgs: ";
-//         for (int arg : topArgs)
-//         {
-//             cout  << arg << ", ";
-//         }
-//         cout << endl;
-
-//         for (int z = 0; z < topArgs.size(); z++)
-//         {
-//             answer.push_back(validIDs[topArgs[z]]);
-//         }
-//         answers.push_back(answer);
-//     }
-//     return answers;
-// }
