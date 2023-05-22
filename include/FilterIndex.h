@@ -6,12 +6,7 @@
 #include <vector>
 #include <set>
 #include <iterator>
-#include "MurmurHash3.h"
-#include "cbloomfilter.h"
-#include "crambo.h"
-#include "FaissKMeans.h"
-// #include "cfilterindex.h"
-#include <stdlib.h>     /* calloc, exit, free */
+#include <stdlib.h>     
 #include <numeric>
 #include <algorithm>
 #include <string> 
@@ -23,13 +18,15 @@
 #include "faiss/AutoTune.h"
 #include "faiss/index_factory.h"
 #include "faiss/index_io.h"
+
+#include "cluster.h"
 using namespace std;
 
 class FilterIndex
 {
     public:
-        FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_);
-        void get_kmeans_index(string metric, string indexpath);
+        FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<vector<string>>properties_, string algo, int mode);
+        void get_index(string metric, string indexpath, int mode);
         void get_cluster_propertiesIndex();
 
         void loadIndex(string indexpath);
@@ -51,10 +48,14 @@ class FilterIndex
         int32_t* neighbor_set;
         int treelen;
         int numAttr;
-        
-        unordered_map<uint16_t, uint16_t>PrpAtrMap;
-        vector<vector<uint16_t>>properties;
-        uint16_t* properties_reordered;
+
+        // Kmeans kmeans;
+        // BLISS bliss;
+        // unique_ptr<cluster> clusterAlgo;
+        cluster* clusterAlgo; // parent class
+        unordered_map<uint8_t, uint8_t>PrpAtrMap;
+        vector<vector<uint8_t>>properties;
+        uint8_t* properties_reordered;
         vector<vector<uint16_t>> ClusterProperties;//properties of each cluster
         // vector<pair<uint16_t, pair<uint16_t, int>>> maxMC;
         uint16_t* maxMC;

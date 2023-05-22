@@ -2,32 +2,28 @@
 #include <fstream>
 #include "FilterIndex.h"
 
+#define DATAPATH "/scratch/gg29/data/"
 int main(int argc, char** argv)
-{
-    if (argc != 4){
-        std::cout << argv[0] << " dataname num_clusters numAttribites"<< std::endl;
-        exit(-1);
-    }
-    string datapath = "../data/" + string(argv[1]) + "/base.fvecs"; 
-    string labelpath = "../data/" + string(argv[1]) + "/label_base_"+string(argv[3])+".txt"; 
-    string metric;
-    if (string(argv[1])=="sift"){
-        metric="L2";}
-    if (string(argv[1])=="glove"){
-        metric="Angular";}
-    else{
-        metric="L2";
-    }
-    string indexpath = string(argv[1])+ string(argv[2]) + string(argv[3]);
-    cout << "filterIndex running..." << endl;
-    size_t d, nb,nc, nq, num_results, buffer_size; 
-    float* data = fvecs_read(datapath.c_str(), &d, &nb);
+{   
+    string basepath, labelpath, indexpath;
+    //default
+    string metric = "L2";
+    int mode = 1;
+    string algo ="kmeans";
+    size_t nc =1024;
+
+    int success = argparser(argc, argv, &basepath, &labelpath, &indexpath, &nc, &algo, &mode);
+
+    size_t d, nb; 
+    float* data = fvecs_read(basepath.c_str(), &d, &nb);
     vector<vector<string>> properties = getproperties(labelpath,' ');
-    cout<<properties.size()<<endl;
     cout << "Data files read" << endl;
-    nc = atoi(argv[2]); // num clusters
-    FilterIndex myFilterIndex(data, d, nb, nc, properties);
-    myFilterIndex.get_kmeans_index(metric, indexpath);
-    // myFilterIndex.get_cluster_propertiesIndex();
-    cout << "Indexed" << endl;
+    chrono::time_point<chrono::high_resolution_clock> t1, t2;
+    t1 = chrono::high_resolution_clock::now();
+    FilterIndex myFilterIndex(data, d, nb, nc, properties, algo, mode);
+    myFilterIndex.get_index(metric, indexpath, mode);
+    t2 = chrono::high_resolution_clock::now();
+    cout<<"Index time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()/1000000000<<endl;
+    cout << "Indexed at: " << indexpath << endl;
+    return 0;
 }

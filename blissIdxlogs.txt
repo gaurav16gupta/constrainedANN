@@ -1,0 +1,54 @@
+rm -f index
+g++ -I /scratch/gg29/faiss -I include/ -std=gnu++17 -lgfortran -Wall -O3 -w -mavx src/readfile.cpp \
+						src/utils.cpp \
+						src/FilterIndexHamming.cpp \
+						src/index.cpp \
+-o index /scratch/gg29/faiss/build/faiss/libfaiss.a /home/gg29/OpenBLAS/libopenblas.a -lpthread -lm -ldl -lgfortran -fopenmp
+Data files read
+27 total unique constraints
+Index time: 1
+Indexed at: indices/siftblissMode1
+Data files read
+27 total unique constraints
+Index time: 1
+Indexed at: indices/siftblissMode2
+Data files read
+15 total unique constraints
+Index time: 1
+Indexed at: indices/glove-100blissMode1
+Data files read
+15 total unique constraints
+Index time: 1
+Indexed at: indices/glove-100blissMode2
+Data files read
+13 total unique constraints
+Index time: 3
+Indexed at: indices/gistblissMode1
+Data files read
+13 total unique constraints
+Index time: 3
+Indexed at: indices/gistblissMode2
+Data files read
+27 total unique constraints
+Index time: 5
+Indexed at: indices/crawlblissMode1
+Data files read
+27 total unique constraints
+Index time: 5
+Indexed at: indices/crawlblissMode2
+Data files read
+21 total unique constraints
+Index time: 0
+Indexed at: indices/audioblissMode1
+Data files read
+21 total unique constraints
+Index time: 0
+Indexed at: indices/audioblissMode2
+Data files read
+36 total unique constraints
+Index time: 2
+Indexed at: indices/msongblissMode1
+Data files read
+36 total unique constraints
+Index time: 2
+Indexed at: indices/msongblissMode2

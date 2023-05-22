@@ -1,6 +1,6 @@
 # constraintANN
 
-Install 
+Install (only for Faiss Kmeans clustering)
 - Faiss
    ```
    cd ..
@@ -28,11 +28,12 @@ Provide path at INC and LFLAGS in Makefile
 
 Get Data:
 - Download from https://rice-my.sharepoint.com/:f:/g/personal/gg29_rice_edu/EhiOVoan9FhJl9eB3BMqpukBcIrSQAXvUY31UrTHDUVGWg?e=jKtKPR
-- Run data/sift/generateRandomTokens.py then data/sift/getGT-filterSearch.py, each time changing the sentence length of attributes to generate the synthetic attributes and groundtruth.
+- To genearate synthetic data: Run data/sift/generateRandomTokens.py then data/sift/getGT-filterSearch.py, each time changing the sentence length (default =3) of attributes to generate the synthetic attributes and groundtruth.
  
 For your own data
 - base vectors and query vectors are stored in .fvecs format
-- base and query attributes are stored in .txt files. Format is
+- base and query attributes are stored in .txt files. 
+- Example -
 ```
 <num points> <num attributes>
 2 outdoor night
@@ -44,22 +45,35 @@ For your own data
  
 Where "2 outdoor night" is an example of space seperated 3 attributes.
 
-Run
+
+Make sure to have these files in the data folder
+```
+data/sift/base.fvecs 
+data/sift/label_base_3.txt
+data/sift/query.fvecs 
+data/sift/label_query_3.txt 
+indices/sift1024blissMode1 
+data/sift/label_3_hard_groundtruth.ivecs
+```
+
+
+If using bliss run
+```
+python3 include/bliss/dataPrepare_constrained.py --data="data/sift"
+python3 include/bliss/construct.py --index='sift_epc40_K10_B1024_R1' --hdim=256 --mode=1 --kn=10
+make index
+./index data/sift/base.fvecs data/sift/label_base_3.txt indices/sift1024blissMode1 1024 bliss 1
+make query
+./query data/sift/base.fvecs data/sift/label_base_3.txt data/sift/query.fvecs data/sift/label_query_3.txt indices/sift1024blissMode1 data/sift/label_3_hard_groundtruth.ivecs 1024 bliss 1 500
+```
+
+If using faiss kmeans run
 ```
 make index
-./index <dataname> <num_clusters> <attribute sentence size>
-./index sift 1024 3
-```
-```
-make query
-./query <dataname> <num_clusters> <attribute sentence size> <buffer size>
-./query sift 1024 3 200
+./index data/sift/base.fvecs data/sift/label_base_3.txt indices/sift1024blissMode1 1024 kmeans 1
+make kmeans
+./query data/sift/base.fvecs data/sift/label_base_3.txt data/sift/query.fvecs data/sift/label_query_3.txt indices/sift1024blissMode1 data/sift/label_3_hard_groundtruth.ivecs 1024 kmeans 1 500
 ```
 
 Todo: 
-- Fix AVX
-- Optimize FilterIndexHamming
-- Parameter optimization. Number of clusters, Tree height, number of splits, balancing etc.
-- Find issue in large attribute sentence length
-- Joint attributes: Combine attributes, just like we do in byte-pair encoding vocab generation. Do for inverted index.
-- Benchmark RAMBO vs inverted index on Joint attributes
+- Variable number of attributes

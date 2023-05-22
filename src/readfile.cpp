@@ -1,22 +1,6 @@
-#include <iostream>
-#include <iomanip>
-#include <string>
-#include <cstring>
-#include <cmath>
-#include <stdio.h>
-#include <string.h>
-#include <cstdlib>
 #include <cassert>
-#include <vector>
-#include <set>
-#include <iterator>
 #include "readfile.h"
-#include <sstream>
-#include <fstream>
 #include <sys/stat.h>
-#include "readfile.h"
-#include "utils.h"
-#include <fstream>
 
 //#include "mnist/mnist_reader.hpp"
 

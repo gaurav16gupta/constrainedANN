@@ -1,28 +1,73 @@
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <cstdlib>
-#include <vector>
-#include <set>
-#include <iterator>
-#include "MurmurHash3.h"
-#include "cbloomfilter.h"
-#include "crambo.h"
-#include "readfile.h"
-#include <stdlib.h>     /* calloc, exit, free */
-#include <numeric>
-#include <algorithm>
-#include <string> 
-#include <cstdint>
-#include <map>
-
-#include <cstdio>
 #include "utils.h"
 #include <bits/stdc++.h>
 
-
 using namespace std;
+
+int argparser(int argc, char** argv, string* basepath, string* labelpath, string* indexpath, size_t* nc, string* algo, int* mode){
+    if (argc < 4){
+        std::clog<<"Usage: "<<std::endl; 
+        std::clog<<"./index <data> <properties> <outfile>";
+        std::clog<<" [--Nc num_clusters] [--Algo method] [--mode method_version]"<<std::endl;
+
+        std::clog<<"Positional arguments: "<<std::endl;
+        std::clog<<"\t data: Filename pointing to an fvecs file (4 byte uint N, then list of  4 byte uint dim, then list of 32-bit little-endian floats)."<<std::endl;
+        std::clog<<"\t properties: Filename pointing to a properties file (text file containing <num points> <num attributes> <newline> whitespace-separated property lists)"<<std::endl;
+        // std::clog<<"\t space: Integer distance ID: 0 for L2 distance, 1 for inner product (angular distance)."<<std::endl;
+        std::clog<<"\t outfile: folder for the index. Example : sift1024blissMode1, sift1024kmeans"<<std::endl;
+
+        std::clog<<"Optional arguments: "<<std::endl;
+        std::clog<<"\t [--Nc num_clusters]: (Optional, default 1024) Number of clusters/bins."<<std::endl;
+        std::clog<<"\t [--Algo method]: (Optional, default kmeans) MEthod used for clustering. Use either bliss or kmeans"<<std::endl;
+        std::clog<<"\t [--mode method_version]: (Optional, default 1) Only for bliss, use either 1,2 or 3. 1: embedding input - ANN labels, 2: embedding input - FilterANN labels, 3: embedding+Attribute input - FilterANN labels"<<std::endl;
+        return -1;
+    }
+
+    // Positional arguments.
+    *basepath = (string(argv[1])); 
+    *labelpath = (string(argv[2]));
+    *indexpath = (string(argv[3]));
+    *nc = std::atoi(argv[4]);
+    *algo = std::string(argv[5]);
+    *mode = std::atoi(argv[6]);
+    return 0;
+}
+int argparser(int argc, char** argv, string* basepath, string* labelpath, string* querypath, string* queryAttripath, string* indexpath, string* GTpath, size_t* nc, string* algo, int* mode, size_t* buffer_size){
+    if (argc < 7){
+        std::clog<<"Usage: "<<std::endl; 
+        std::clog<<"./index <data> <properties> <queries> <queryProperties> <index> <groundtruth>";
+        std::clog<<" [--Nc num_clusters] [--Algo method] [--mode method_version]"<<std::endl;
+
+        std::clog<<"Positional arguments: "<<std::endl;
+        std::clog<<"\t data: Filename pointing to an fvecs file (4 byte uint N, then list of  4 byte uint dim, then list of 32-bit little-endian floats)."<<std::endl;
+        std::clog<<"\t properties: Filename pointing to a properties file (text file containing <num points> <num attributes> <newline> whitespace-separated property lists)"<<std::endl;
+        std::clog<<"\t queries: file for the queries."<<std::endl;
+        std::clog<<"\t queryProperties: file for the queryProperties."<<std::endl;;
+        std::clog<<"\t index: folder for the index. Example : sift1024blissMode1, sift1024kmeans"<<std::endl;
+        std::clog<<"\t groundtruth: file for the groundtruth."<<std::endl;
+
+        std::clog<<"Optional arguments: "<<std::endl;
+        std::clog<<"\t [--Nc num_clusters]: (Optional, default 1024) Number of clusters/bins."<<std::endl;
+        std::clog<<"\t [--Algo method]: (Optional, default kmeans) MEthod used for clustering. Use either bliss or kmeans"<<std::endl;
+        std::clog<<"\t [--mode method_version]: (Optional, default 1) Only for bliss, use either 1,2 or 3. 1: embedding input - ANN labels, 2: embedding input - FilterANN labels, 3: embedding+Attribute input - FilterANN labels"<<std::endl;
+        std::clog<<"\t [--Bf BufferSize]: (Optional, default 500) Number of distance computations."<<std::endl;
+
+        return -1;
+    }
+
+    // Positional arguments.
+    *basepath = (string(argv[1])); 
+    *labelpath = (string(argv[2]));
+    *querypath = (string(argv[3]));
+    *queryAttripath = (string(argv[4])); 
+    *indexpath = (string(argv[5]));
+    *GTpath = (string(argv[6]));
+    *nc = std::atoi(argv[7]);
+    *algo = std::string(argv[8]);
+    *mode = std::atoi(argv[9]);
+    *buffer_size = std::atoi(argv[10]);
+    return 0;
+}
 
 double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
     uint32_t count = 0;
@@ -38,37 +83,105 @@ double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
     return (count/double(nq*k));
 }
 
-float L2sim(float* a, float* b, float norm_bsq, size_t d){
-    float dist=0;
+float IP(float* a, float* b, size_t d){
+    float ip=0;
     for(uint32_t k = 0; k < d; ++k) {    
-        dist += a[k]*b[k]; // one unit FLOP- mul
-        // dist += pow(a[k]-b[k],2); // two units FLOPS- mul and sub
+        ip += a[k]*b[k]; // one unit FLOP- mul
     } 
-    dist= dist- norm_bsq;
+    return ip;
+}
+
+double L2sim(float* a, float* b, float norm_bsq, size_t d){
+    return (IP(a, b, d) -norm_bsq);
+}
+
+double L2Square(float* a, float* b, size_t d){
+    double dist=0;
+    for(uint32_t k = 0; k < d; ++k) {    
+        dist += pow(a[k]-b[k],2); // two units FLOPS- mul and sub
+    } 
     return dist;
 }
 
-// Not giving speedup!! Check the issue
-float L2SqrSIMD16ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
-    float PORTABLE_ALIGN32 TmpRes[8];
+double L2normSquare(float* a, size_t d){
+    double norm=0;
+    for(uint32_t k = 0; k < d; ++k) {    
+        norm += a[k]*a[k]; // two units FLOPS- mul and sub
+    } 
+    return norm;
+}
 
+float IPSIMD4ExtAVX(float *pVect1, float *pVect2, size_t qty) {
+    float PORTABLE_ALIGN32 TmpRes[8];
     size_t qty16 = qty / 16;
+    size_t qty4 = qty / 4;
     const float *pEnd1 = pVect1 + 16 * qty16;
+    const float *pEnd2 = pVect1 + 4 * qty4;
     __m256 sum256 = _mm256_set1_ps(0);
     while (pVect1 < pEnd1) {
         //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
-        const __m256 v1 = _mm256_loadu_ps(pVect1);
+        __m256 v1 = _mm256_loadu_ps(pVect1);
         pVect1 += 8;
-        const __m256 v2 = _mm256_loadu_ps(pVect2);
+        __m256 v2 = _mm256_loadu_ps(pVect2);
+        pVect2 += 8;
+        sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
+
+        v1 = _mm256_loadu_ps(pVect1);
+        pVect1 += 8;
+        v2 = _mm256_loadu_ps(pVect2);
         pVect2 += 8;
         sum256 = _mm256_add_ps(sum256, _mm256_mul_ps(v1, v2));
     }
-    _mm256_store_ps(TmpRes, sum256);
-    float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] - norm_bsq;
+
+    __m128 v1, v2;
+    __m128 sum_prod = _mm_add_ps(_mm256_extractf128_ps(sum256, 0), _mm256_extractf128_ps(sum256, 1));
+    while (pVect1 < pEnd2) {
+        v1 = _mm_loadu_ps(pVect1);
+        pVect1 += 4;
+        v2 = _mm_loadu_ps(pVect2);
+        pVect2 += 4;
+        sum_prod = _mm_add_ps(sum_prod, _mm_mul_ps(v1, v2));
+    }
+    _mm_store_ps(TmpRes, sum_prod);
+    return TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3];
+}
+
+float L2SIMD4ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
+    return (IPSIMD4ExtAVX(pVect1, pVect2, qty) -norm_bsq);
+}
+
+float spaseMul(uint8_t* prop, float* weight ,int na){
+    float sum=0;
+    for (size_t i=0; i<na; i++){
+        sum+=weight[prop[i]];
+    }
     return sum;
 }
 
-uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen){
+// float IPSIMD16ExtAVX512(float *pVect1,  float *pVect2,  size_t qty) {
+//     float PORTABLE_ALIGN64 TmpRes[16];
+//     size_t qty16 = qty / 16;
+//     const float *pEnd1 = pVect1 + 16 * qty16;
+//     __m512 sum512 = _mm512_set1_ps(0);
+//     while (pVect1 < pEnd1) {
+//         //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
+//         __m512 v1 = _mm512_loadu_ps(pVect1);
+//         pVect1 += 16;
+//         __m512 v2 = _mm512_loadu_ps(pVect2);
+//         pVect2 += 16;
+//         sum512 = _mm512_add_ps(sum512, _mm512_mul_ps(v1, v2));
+//     }
+//     _mm512_store_ps(TmpRes, sum512);
+//     float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] + TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
+//     return sum;
+// }
+
+// float L2SIMD16ExtAVX512(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
+//     return (IPSIMD16ExtAVX512(pVect1, pVect2, qty) -norm_bsq);
+// }
+
+
+uint16_t getclusterPart(uint16_t* maxMC, uint8_t* props, int treelen){
     // maxMC: property location, property, frequency
     for (uint16_t i=0;i<treelen; i++){
         if (maxMC[i*3+1] == props[maxMC[i*3+0]]){
@@ -154,145 +267,3 @@ vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, v
     }
     return topk;
 }
-
-//-----------------Unused functions--------------------------------------------------------------------------------------------------------------------------------
-
-
-   // //check for logical errors
-    // for (int i =counts[10]; i< counts[11]; i++){
-    //     cout<<Lookup[i]<<" ";
-    // }
-    // cout<<endl;
-    // for (int clID = 11; clID < 12; clID++){
-    //     cout<<counts[clID]-counts[clID-1]<<endl; 
-    // }
-
-       // //check for logical errors
-    // for (int clID = 10; clID < 11; clID++){
-    //     for (int j=0; j< treelen+1; j++){
-    //         int id = clID*(treelen+1) +j;
-    //         cout<<maxMCIDs[id]<<endl;
-    //         // for (int i =counts[j]; i< counts[j+1]; i++){
-    //         //     cout<<Lookup[i]<<" ";}
-    //         //     cout<<endl;
-    //     }
-    //     cout<<endl;
-    // }
-
-vector<int> argsort(int * query, int length)
-{
-    //A helper function to find the top num_results args in the coords closest to query
-    //O(nk)
-    vector<tuple<int, int>> sorted;
-    for (int x = 0; x < length; x ++)
-    {
-        sorted.push_back({x, -1.0});
-    }
-    for (int index = 0; index < length; index++)
-    {
-        for (int order = 0; order < length; order++)
-        {
-            if (query[index] < get<1>(sorted.at(order)) || get<1>(sorted.at(order)) < 0)
-            {
-                sorted.insert(sorted.begin() + order, {index, query[index]});
-                sorted.pop_back();
-                break;
-            }
-        }
-    }
-    vector<int> nearest_neighbors;
-    for (int index = 0; index < length; index++)
-    {
-        nearest_neighbors.push_back(get<0>(sorted.at(index)));
-    }
-    return nearest_neighbors;
-}
-
-vector<int> vectorArgsort(vector<double> query)
-{
-    //A helper function to find the top num_results args in the coords closest to query
-    //O(nk)
-    vector<tuple<int, double>> sorted;
-    for (size_t x = 0; x < query.size(); x ++)
-    {
-        sorted.push_back({x, -1.0});
-    }
-    for (size_t index = 0; index < query.size(); index++)
-    {
-        for (size_t order = 0; order < query.size(); order++)
-        {
-            if (query[index] < get<1>(sorted.at(order)) || get<1>(sorted.at(order)) < 0)
-            {
-                sorted.insert(sorted.begin() + order, {index, query[index]});
-                sorted.pop_back();
-                break;
-            }
-        }
-    }
-    vector<int> nearest_neighbors;
-    for (size_t index = 0; index < query.size(); index++)
-    {
-        nearest_neighbors.push_back(get<0>(sorted.at(index)));
-    }
-    return nearest_neighbors;
-}
-
-
-
-
-
-
-
-// vector<vector<int>> computeGroundTruth(vector<vector<int>> queryset, vector<set<string>> queryprops, vector<vector<int>> data, vector<set<string>> properties, int num_results)
-// {
-//     vector<vector<int>> answers;
-//     for (int x = 0; x < queryset.size(); x++)
-//     {
-//         vector<int> answer;
-//         set<string> props = queryprops[x];
-//         vector<int> validIDs;
-//         for (int y = 0; y < properties.size(); y++)
-//         {
-//             bool valid = true;
-//             for (auto property : props)
-//             {
-//                 if (!properties[y].count(property))
-//                 {
-//                     valid = false;
-//                 }
-//             }
-//             if (valid)
-//             {
-//                 validIDs.push_back(y);
-//             }
-//         }
-//         cout << "num validIDs: " << validIDs.size() << endl;
-
-//         vector<vector<int>> validCoords;
-//         for (int a = 0; a < validIDs.size(); a++)
-//         {
-//             validCoords.push_back(data[validIDs[a]]);
-//         }
-
-//         cout << "num validCoords: " << validCoords.size() << endl;
-        
-//         vector<uint32_t> topArgs = argTopK(queryset[x], validCoords, num_results);
-
-//         vector<uint32_t> argTopK(float* query, float* vectors, uint32_t d, uint32_t N, vector<uint32_t> idx, uint32_t idxSize, int k, float* topkDist){
-
-
-//         cout << "topArgs: ";
-//         for (int arg : topArgs)
-//         {
-//             cout  << arg << ", ";
-//         }
-//         cout << endl;
-
-//         for (int z = 0; z < topArgs.size(); z++)
-//         {
-//             answer.push_back(validIDs[topArgs[z]]);
-//         }
-//         answers.push_back(answer);
-//     }
-//     return answers;
-// }
