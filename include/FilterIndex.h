@@ -18,10 +18,8 @@
 #include "faiss/AutoTune.h"
 #include "faiss/index_factory.h"
 #include "faiss/index_io.h"
-// #include "FaissKMeans.h"
-// #include "BLISS.h"
-#include "cluster.h"
 
+#include "cluster.h"
 using namespace std;
 
 class FilterIndex
@@ -55,9 +53,9 @@ class FilterIndex
         // BLISS bliss;
         // unique_ptr<cluster> clusterAlgo;
         cluster* clusterAlgo; // parent class
-        unordered_map<uint16_t, uint16_t>PrpAtrMap;
-        vector<vector<uint16_t>>properties;
-        uint16_t* properties_reordered;
+        unordered_map<uint8_t, uint8_t>PrpAtrMap;
+        vector<vector<uint8_t>>properties;
+        uint8_t* properties_reordered;
         vector<vector<uint16_t>> ClusterProperties;//properties of each cluster
         // vector<pair<uint16_t, pair<uint16_t, int>>> maxMC;
         uint16_t* maxMC;

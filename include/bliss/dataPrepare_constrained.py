@@ -60,7 +60,7 @@ def makeTraindata_wAttr(dataname, K):
     #     trainConst = trainConst[pick,:]
   
     Invbins = getInvertedIndex(trainConst)
-    norms = 0.5*np.linalg.norm(train,axis=1) # if L2 distance
+    norms = 0.5*np.linalg.norm(train,axis=1)**2 # if L2 distance
 
     # do filter then search
     # get neighbors
@@ -153,5 +153,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dataname = '{}/'.format(args.data)
-    makeTraindata(dataname, 100)
+    # makeTraindata(dataname, 100)
     makeTraindata_wAttr(dataname, 100)

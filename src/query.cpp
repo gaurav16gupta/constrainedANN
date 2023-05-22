@@ -31,7 +31,6 @@ int main(int argc, char** argv)
     // nq = 10000;
     chrono::time_point<chrono::high_resolution_clock> t1, t2;
     t1 = chrono::high_resolution_clock::now();
-    
     myFilterIndex.query(queryset, nq, queryprops, num_results, buffer_size);
     t2 = chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = t2 - t1;

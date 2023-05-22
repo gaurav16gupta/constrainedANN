@@ -3,10 +3,10 @@ import argparse
 import os, sys
 sys.path.append('../indices/')
 import pdb
-import argparse
 from utils import *
 from train import trainIndex
 from config import config
+import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--index", default='sift_epc40_K10_B1024_R1', type=str)
@@ -15,7 +15,6 @@ parser.add_argument("--memmap", default=False, type=bool)
 parser.add_argument("--mode", default=1, type=int)
 parser.add_argument("--hdim", default=256, type=int)
 parser.add_argument("--kn", default=10, type=int)
-
 args = parser.parse_args()
 
 datasetName = args.index.split('_')[0]  

@@ -31,8 +31,8 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
     d =d_; // dim
     nb = nb_; //num data points
     nc = nc_; // num clusters
-    treelen = 4; //length of hamming tree, num miniclusters= treelen+1
-
+    treelen = 20; //length of truncated huffman tree, num miniclusters= treelen+1
+    // cin >> treelen;
     if (algo=="kmeans") {
         clusterAlgo = new Kmeans(nc, d); //dynamic allocation of object class
     }
@@ -44,7 +44,7 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
         clusterAlgo= new Kmeans(nc, d);
     }
     properties.resize(nb);
-    uint16_t cnt=0;
+    uint8_t cnt=0;
     for (int i=0; i<nb; i++){
         for (string prp: properties_[i]){
             if (prLook.count(prp)==0){
@@ -198,20 +198,22 @@ void FilterIndex::loadIndex(string indexpath){
     // reorder data and index
     dataset_reordered = new float[nb*d];
     data_norms_reordered = new float[nb];
-    properties_reordered = new uint16_t[nb*numAttr];
+    properties_reordered = new uint8_t[nb*numAttr];
     for(uint32_t i = 0; i < nb; ++i) {
         copy(dataset+Lookup[i]*d, dataset+(Lookup[i]+1)*d , dataset_reordered+i*d);
         data_norms_reordered[i] = data_norms[Lookup[i]];
         memcpy(properties_reordered+ i*numAttr, properties[Lookup[i]].data(), sizeof(*properties_reordered) * numAttr);
     }
-    // delete dataset;
+    delete dataset;
+    delete data_norms;
+    vector<vector<uint8_t>>().swap(properties);
 }
 
 void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances){
     neighbor_set = new int32_t[nq*num_results]{-1};
-    cout<<"num queries: "<<nq<<endl;
+    cout<<"num queries: "<<nq<<", "<<"num max attributes: "<<numAttr<<endl;
     for (size_t i = 0; i < nq; i++){
-        // cout<<i<<endl;
+        // run query
         findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances, i);
     }
 }
@@ -219,101 +221,158 @@ void FilterIndex::query(float* queryset, int nq, vector<vector<string>> querypro
 // start from best cluster -> choose minicluster -> bruteforce search
 void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum)
 {   
-    chrono::time_point<chrono::high_resolution_clock> t1, t2, t3, t4, t5, t6;
-    vector<float> topkDist;
-    vector<uint16_t> props;
-    for (string stprp: Stprops){
-        props.push_back(prLook[stprp]);
+    chrono::time_point<chrono::high_resolution_clock> t1, t2,t2_1, t3, t4, t5, t6;
+    t1 = chrono::high_resolution_clock::now();
+    uint8_t props[numAttr];
+    uint8_t countX = 0; // count of X (missing attributes) in query props
+    string querymode = "varying";
+    for (size_t j =0; j<numAttr ;j++){
+        if (Stprops[j] !="X") props[j]= (prLook[Stprops[j]]);
+        else {
+            countX++;
+            props[j]=255; // this should be a key which is not seen before
+        }
     }
+    if (countX==numAttr) querymode = "noAttribute";
+    else if (countX==0) querymode = "fixed";
+    t2 = chrono::high_resolution_clock::now();
+
     // sort(props.begin(), props.end());
     priority_queue<pair<float, uint32_t> > pq;
     uint32_t simid[nc];
     float simv[nc];
     clusterAlgo->getscore(query, simv);
-   
+    t2_1 = chrono::high_resolution_clock::now();
     // need argsorted IDs
     iota(simid, simid+nc, 0);
-    stable_sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
+    // partial_sort(simid, simid+100, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
+    sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
+
     priority_queue<pair<float, uint32_t> > Candidates_pq;
-    uint32_t* Candidates = new uint32_t[max_num_distances];
-    float* score = new float[max_num_distances];
+    uint32_t Candidates[max_num_distances];
+    float score[max_num_distances];
     int seen=0, seenbin=0;
     float sim;
     float a=0,b=0;
-    t1 = chrono::high_resolution_clock::now();
-    while(seen<max_num_distances && seenbin<nc){ 
-        uint32_t bin = simid[seenbin];
-        seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
-        int id = bin*(treelen+1);
-        bin = bin*(treelen+1);
-        //get which disjoint part of the cluster query belongs to
-        uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
-        bin = bin+membership;
-        
-        for (int i =counts[bin]; i< counts[bin+1] && seen<max_num_distances; i++){
-            // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2); software prefect is not very useful here
-            //check if constraint statisfies
-            int j =0;
-            while (j<numAttr && properties_reordered[i*numAttr +j]== props[j]) j++; // plus the number of empty attrs X
-            if (j==numAttr){
-                Candidates[seen]=i; 
-                seen++;
+    t3 = chrono::high_resolution_clock::now();
+    if (querymode == "fixed"){
+        while(seen<max_num_distances && seenbin<nc){ 
+            uint32_t bin = simid[seenbin];
+            seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
+            int id = bin*(treelen+1);
+            bin = bin*(treelen+1);
+
+            //get which sub-cluster query belongs to
+            uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
+            bin = bin+membership;
+            for (int i =counts[bin]; i< counts[bin+1] && seen<max_num_distances; i++){
+                // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2); software prefect is not very useful here
+                //check if constraint statisfies
+                int j =0;
+                while (j<numAttr && properties_reordered[i*numAttr +j]== props[j]) j++; // plus the number of empty attrs X
+                if (j==numAttr){
+                    Candidates[seen]=i; 
+                    seen++;
+                }
             }
         }
     }
-    t2 = chrono::high_resolution_clock::now();
+    else if (querymode == "varying"){
+        while(seen<max_num_distances && seenbin<nc){ 
+            uint32_t bin = simid[seenbin];
+            seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
+            bin = bin*(treelen+1);
+            // go through each sub partition
+            bool checkremaining=true;
+            for (uint16_t u=0;u<treelen; u++){
+                if (props[maxMC[u*3+0]]==255){
+                    for (int i =counts[bin+u]; i< counts[bin+u+1] && seen<max_num_distances; i++){
+                        //check if constraint statisfies
+                        int j =0;
+                        while (j<numAttr && (properties_reordered[i*numAttr +j]== props[j] | props[j]==255)) j++; 
+                        if (j==numAttr){
+                            Candidates[seen]=i; 
+                            seen++;
+                        }
+                    }
+                }
+                else if (maxMC[u*3+1] == props[maxMC[u*3+0]]){
+                    for (int i =counts[bin+u]; i< counts[bin+u+1] && seen<max_num_distances; i++){
+                        //check if constraint statisfies
+                        int j =0;
+                        while (j<numAttr && (properties_reordered[i*numAttr +j]== props[j] | props[j]==255)) j++; 
+                        if (j==numAttr){
+                            Candidates[seen]=i; 
+                            seen++;
+                        }
+                    }
+                    checkremaining = false;
+                    break;
+                }
+            }
+            if (checkremaining == true){
+                for (int i =counts[bin+ treelen]; i< counts[bin+ treelen+1] && seen<max_num_distances; i++){
+                        //check if constraint statisfies
+                        int j =0;
+                       while (j<numAttr && (properties_reordered[i*numAttr +j]== props[j] | props[j]==255)) j++; 
+                        if (j==numAttr){
+                            Candidates[seen]=i; 
+                            seen++;
+                        }
+                }
+            }
+        }
+    }
+    else if (querymode == "noAttribute"){
+        while(seen<max_num_distances && seenbin<nc){ 
+            uint32_t bin = simid[seenbin];
+            seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
+            bin = bin*(treelen+1);
+            // go through each sub partition
+            for (uint16_t u=0;u<treelen; u++){
+                for (int i =counts[bin+u]; i< counts[bin+u+1] && seen<max_num_distances; i++){
+                    Candidates[seen]=i; 
+                    seen++;
+                }
+            }  
+        }
+    }
+    else cout << "querymode got a different val somehow"<<endl;
+    t4 = chrono::high_resolution_clock::now();
+    // NN distance computations
+    float maxk;
     if (seen<num_results+1){
         for (int i =0; i< seen; i++){ 
             neighbor_set[qnum*num_results+ i] = Lookup[Candidates[i]];
         }
     }
     else{
-        for (int i =0; i< seen; i++){ 
-            //  __builtin_prefetch (dataset_reordered +Candidates[i+1]*d, 0, 2);
-            score[i] = L2SIMD4ExtAVX(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
-            Candidates_pq.push({score[i], Lookup[Candidates[i]]});
+        for (int i =0; i< seen; i++){
+            score[i] = -L2SIMD4ExtAVX(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
         }
-        for (int i =0; i< min(seen,num_results); i++){ 
-            neighbor_set[qnum*num_results+ i] = Candidates_pq.top().second;
+        for (int i =0; i< num_results; i++){ 
+            Candidates_pq.push({score[i],Candidates[i]});
+        }
+        maxk = Candidates_pq.top().first;
+        for (int i =num_results; i< seen; i++){ 
+            if (score[i]< maxk){
+                maxk = Candidates_pq.top().first;
+                Candidates_pq.pop();
+                Candidates_pq.push({score[i], Candidates[i]});
+            }
+        }
+        for (int i =0; i< num_results; i++){ 
+            neighbor_set[qnum*num_results+ i] = Lookup[Candidates_pq.top().second];
             Candidates_pq.pop();
         }
     }
-    t3 = chrono::high_resolution_clock::now();
+    t5 = chrono::high_resolution_clock::now();
     // cout<<"time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()<<" ";
-    // cout<<"time: "<<chrono::duration_cast<chrono::nanoseconds>(t3 - t2).count()<<endl;
-
+    // cout<<chrono::duration_cast<chrono::nanoseconds>(t2_1 - t2).count()<<" ";
+    // cout<<chrono::duration_cast<chrono::nanoseconds>(t3 - t2_1).count()<<" ";
+    // cout<<chrono::duration_cast<chrono::nanoseconds>(t4 - t3).count()<<" ";
+    // cout<<chrono::duration_cast<chrono::nanoseconds>(t5 - t4).count()<<endl;    
 }
 
 // TODO
 // 1) change dtype of the properties (uint16_t/uint32_t/uint8_t), based on the vocab size
-
-//debug
-        // for (int p=0;p<nb;p++){
-        //     if (Lookup[p]==57891){
-        //         cout<<Stprops<<endl;
-        //         for (int u= 0;u<numAttr;u++){
-        //             cout<<properties_reordered[p*numAttr +u]<<" ";
-        //         }
-        //         cout<<endl;
-        //         for (int u= 0;u<numAttr;u++){
-        //             cout<<props[u]<<" ";
-        //         }
-        //         cout<<endl;
-        //     }
-        // }
-        // string g;
-        // cin>>g;
-        //
-        // score[i] = L2sim(query, dataset_reordered +Candidates[i]*d, data_norms_reordered[Candidates[i]], d);
-        // score[i] = -L2dist(query, dataset_reordered +Candidates[i]*d, d);
-
-        // if ( Lookup[Candidates[i]]==57891){
-        //     cout<<score[i]<<endl;
-        //     cout<<scoresimd<<endl;
-        //     cout<<"data norm/2 "<<data_norms_reordered[Candidates[i]]<<endl;
-        //     cout<<"aSq "<<L2norm(query, d) <<endl;
-        //     cout<<"bSq "<<L2norm(dataset_reordered +Candidates[i]*d, d) <<endl;
-        //     cout<<"ip "<< IP(query, dataset_reordered +Candidates[i]*d, d)<<endl;
-
-        //     cout<<L2dist(query, dataset_reordered +Candidates[i]*d, d)<<endl;
-        // }

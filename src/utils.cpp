@@ -150,8 +150,38 @@ float L2SIMD4ExtAVX(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
     return (IPSIMD4ExtAVX(pVect1, pVect2, qty) -norm_bsq);
 }
 
+float spaseMul(uint8_t* prop, float* weight ,int na){
+    float sum=0;
+    for (size_t i=0; i<na; i++){
+        sum+=weight[prop[i]];
+    }
+    return sum;
+}
 
-uint16_t getclusterPart(uint16_t* maxMC, vector<uint16_t> &props, int treelen){
+// float IPSIMD16ExtAVX512(float *pVect1,  float *pVect2,  size_t qty) {
+//     float PORTABLE_ALIGN64 TmpRes[16];
+//     size_t qty16 = qty / 16;
+//     const float *pEnd1 = pVect1 + 16 * qty16;
+//     __m512 sum512 = _mm512_set1_ps(0);
+//     while (pVect1 < pEnd1) {
+//         //_mm_prefetch((char*)(pVect2 + 16), _MM_HINT_T0);
+//         __m512 v1 = _mm512_loadu_ps(pVect1);
+//         pVect1 += 16;
+//         __m512 v2 = _mm512_loadu_ps(pVect2);
+//         pVect2 += 16;
+//         sum512 = _mm512_add_ps(sum512, _mm512_mul_ps(v1, v2));
+//     }
+//     _mm512_store_ps(TmpRes, sum512);
+//     float sum = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] + TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] + TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
+//     return sum;
+// }
+
+// float L2SIMD16ExtAVX512(float *pVect1, float *pVect2, float norm_bsq, size_t qty) {
+//     return (IPSIMD16ExtAVX512(pVect1, pVect2, qty) -norm_bsq);
+// }
+
+
+uint16_t getclusterPart(uint16_t* maxMC, uint8_t* props, int treelen){
     // maxMC: property location, property, frequency
     for (uint16_t i=0;i<treelen; i++){
         if (maxMC[i*3+1] == props[maxMC[i*3+0]]){

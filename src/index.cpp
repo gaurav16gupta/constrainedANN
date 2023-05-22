@@ -23,7 +23,7 @@ int main(int argc, char** argv)
     FilterIndex myFilterIndex(data, d, nb, nc, properties, algo, mode);
     myFilterIndex.get_index(metric, indexpath, mode);
     t2 = chrono::high_resolution_clock::now();
-    cout<<"Index time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()<<endl;
+    cout<<"Index time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()/1000000000<<endl;
     cout << "Indexed at: " << indexpath << endl;
     return 0;
 }

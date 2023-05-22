@@ -1,6 +1,0 @@
-27 unique constraints
-Loaded
-Query files read...
-num queries: 1000
-numClusters, buffersize, QPS, Recall100@100 :
-1024,500,1283.758022,0.949360
