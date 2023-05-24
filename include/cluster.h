@@ -138,10 +138,10 @@ class Kmeans: public cluster{
         }
 
         uint32_t top(float* input){
-            uint32_t bin;
-            float maxscore = 0;  
+            uint32_t bin=0;
+            float maxscore = L2SIMD4ExtAVX(input, centroids, cen_norms[0], d);;  
             float temp;
-            for(uint32_t j = 0; j < nc; ++j){  
+            for(uint32_t j = 1; j < nc; ++j){  
                 temp = L2SIMD4ExtAVX(input, centroids+j*d, cen_norms[j], d);
                 // for(uint32_t k = 0; k < d; ++k) {                 
                 //     temp += pow(input[k] - centroids[j*d +k], 2);   //change this to L2 dist function    

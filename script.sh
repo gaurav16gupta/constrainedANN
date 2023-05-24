@@ -366,14 +366,16 @@
 # python3 include/bliss/construct.py --index='crawl_epc40_K10_B2048_R1' --hdim=256 --mode=1 --kn=10
 # python3 include/bliss/construct.py --index='crawl_epc40_K15_B2048_R1' --hdim=256 --mode=2 --kn=15
 
-make query
-taskset -c 0 ./query /scratch/gg29/data/sift/base.fvecs \
-        /scratch/gg29/data/sift/label_base_3.txt \
-        /scratch/gg29/data/sift/query.fvecs \
-        /scratch/gg29/data/sift/label_query_3.txt \
-        indices/sift1024kmeansMode1 \
-        /scratch/gg29/data/sift/label_3_hard_groundtruth.ivecs \
-        1024 kmeans 1 500
+# make query
+# taskset -c 0 ./query /scratch/gg29/data/sift/base.fvecs \
+#         /scratch/gg29/data/sift/label_base_3.txt \
+#         /scratch/gg29/data/sift/query.fvecs \
+#         /scratch/gg29/data/sift/label_query_3.txt \
+#         indices/sift1024kmeansMode1 \
+#         /scratch/gg29/data/sift/label_3_hard_groundtruth.ivecs \
+#         1024 kmeans 1 50
+
+# Experiments on variable attributes -------------------------------------------------------------------------
 
 # for i in 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
 # ./query /scratch/gg29/data/glove-100/base.fvecs \
@@ -419,3 +421,97 @@ taskset -c 0 ./query /scratch/gg29/data/sift/base.fvecs \
 #         indices/glove-100-1024kmeansMode1 \
 #         /scratch/gg29/data/glove-100/label_3_0.9_hard_groundtruth.ivecs \
 #         1024 kmeans 1 "$i"| sed -n 7p; done > results2/CAPSkmeans_glove-100VarAttr0.9.txt
+
+# index with larger number of attributes
+# make index
+# taskset -c 0-63 ./index /scratch/gg29/data/sift/base.fvecs \
+#         /scratch/gg29/data/sift/label_base_10.txt \
+#         indices2/sift1024kmeans_10 \
+#         1024 kmeans 1
+# taskset -c 0-63 ./index /scratch/gg29/data/sift/base.fvecs \
+#         /scratch/gg29/data/sift/label_base_100.txt \
+#         indices2/sift1024kmeans_100 \
+#         1024 kmeans 1
+
+# ./index /scratch/gg29/data/glove-100/base.fvecs \
+#         /scratch/gg29/data/glove-100/label_base_10.txt \
+#         indices2/glove-100-1024kmeans_10 \
+#         1024 kmeans 1
+# taskset -c 0-63 ./index /scratch/gg29/data/glove-100/base.fvecs \
+#         /scratch/gg29/data/glove-100/label_base_100.txt \
+#         indices2/glove-100-1024kmeans_100 \
+#         1024 kmeans 1
+
+# taskset -c 0-63 ./index /scratch/gg29/data/gist/base.fvecs \
+#         /scratch/gg29/data/gist/label_base_10.txt \
+#         indices2/gist1024kmeans_10 \
+#         1024 kmeans 1
+# taskset -c 0-63 ./index /scratch/gg29/data/gist/base.fvecs \
+#         /scratch/gg29/data/gist/label_base_100.txt \
+#         indices2/gist1024kmeans_100 \
+#         1024 kmeans 1
+
+# taskset -c 0-63 ./index /scratch/gg29/data/sift/base.fvecs \
+#         /scratch/gg29/data/sift/label_base_10.txt \
+#         indices2/sift1024kmeans_10 \
+#         1024 kmeans 1
+# taskset -c 0-63 ./index /scratch/gg29/data/sift/base.fvecs \
+#         /scratch/gg29/data/sift/label_base_100.txt \
+#         indices2/sift1024kmeans_100 \
+#         1024 kmeans 1
+
+
+# for i in 50 100 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
+# ./query /scratch/gg29/data/sift/base.fvecs \
+#         /scratch/gg29/data/sift/label_base_10.txt \
+#         /scratch/gg29/data/sift/query.fvecs \
+#         /scratch/gg29/data/sift/label_query_10_0.7.txt \
+#         indices2/sift1024kmeans_10 \
+#         /scratch/gg29/data/sift/label_10_0.7_hard_groundtruth.ivecs \
+#         1024 kmeans 1 "$i"| sed -n 11p; done > results2/CAPSkmeans_siftNumAttr10_VarAttr_0.7.txt
+
+for i in 50 100 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
+./query /scratch/gg29/data/sift/base.fvecs \
+        /scratch/gg29/data/sift/label_base_100.txt \
+        /scratch/gg29/data/sift/query.fvecs \
+        /scratch/gg29/data/sift/label_query_100_0.97.txt \
+        indices2/sift1024kmeans_100 \
+        /scratch/gg29/data/sift/label_100_0.97_hard_groundtruth.ivecs \
+        1024 kmeans 1 "$i"| sed -n 11p; done > results2/CAPSkmeans_siftNumAttr100_VarAttr_0.97.txt
+
+
+for i in 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
+./query /scratch/gg29/data/glove-100/base.fvecs \
+        /scratch/gg29/data/glove-100/label_base_10.txt \
+        /scratch/gg29/data/glove-100/query.fvecs \
+        /scratch/gg29/data/glove-100/label_query_10_0.7.txt \
+        indices2/glove-100-1024kmeans_10 \
+        /scratch/gg29/data/glove-100/label_10_0.7_hard_groundtruth.ivecs \
+        1024 kmeans 1 "$i"| sed -n 11p; done > results2/CAPSkmeans_glove-100NumAttr10_VarAttr_0.7.txt
+
+for i in 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
+./query /scratch/gg29/data/glove-100/base.fvecs \
+        /scratch/gg29/data/glove-100/label_base_100.txt \
+        /scratch/gg29/data/glove-100/query.fvecs \
+        /scratch/gg29/data/glove-100/label_query_100_0.97.txt \
+        indices2/glove-100-1024kmeans_100 \
+        /scratch/gg29/data/glove-100/label_100_0.97_hard_groundtruth.ivecs \
+        1024 kmeans 1 "$i"| sed -n 11p; done > results2/CAPSkmeans_glove-100NumAttr100_VarAttr_0.97.txt
+
+for i in 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
+./query /scratch/gg29/data/gist/base.fvecs \
+        /scratch/gg29/data/gist/label_base_10.txt \
+        /scratch/gg29/data/gist/query.fvecs \
+        /scratch/gg29/data/gist/label_query_10_0.7.txt \
+        indices2/gist1024kmeans_10 \
+        /scratch/gg29/data/gist/label_10_0.7_hard_groundtruth.ivecs \
+        1024 kmeans 1 "$i"| sed -n 11p; done > results2/CAPSkmeans_gistNumAttr10_VarAttr_0.7.txt
+
+for i in 500 700 1000 1500 2000 3000 4000 5000 8000 10000 20000 40000 80000 100000; do taskset -c 0 \
+./query /scratch/gg29/data/gist/base.fvecs \
+        /scratch/gg29/data/gist/label_base_100.txt \
+        /scratch/gg29/data/gist/query.fvecs \
+        /scratch/gg29/data/gist/label_query_100_0.97.txt \
+        indices2/gist-1024kmeans_100 \
+        /scratch/gg29/data/gist/label_100_0.97_hard_groundtruth.ivecs \
+        1024 kmeans 1 "$i"| sed -n 11p; done > results2/CAPSkmeans_gistNumAttr100_VarAttr_0.97.txt

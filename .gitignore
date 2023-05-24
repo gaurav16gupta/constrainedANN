@@ -1,9 +1,10 @@
-data/
 *.bin
-faiss/
-faiss-tool/
 index
-preFilterIndex
-libfaiss.so
+query
 sift*/
 indices/
+indices2/
+results2/
+plots.py   
+script.sh 
+unused/
