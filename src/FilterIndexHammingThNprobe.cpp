@@ -55,8 +55,10 @@ FilterIndex::FilterIndex(float* data, size_t d_, size_t nb_, size_t nc_, vector<
         }
         // beware:: sorting the properties will loose the position information!!
         // sort(properties[i].begin(), properties[i].end()); 
-    }   
+    }  
     cout<<unsigned(cnt)<<" total unique constraints"<<endl; 
+    if (cnt>254) cout<<"change attribute token precision to uint16_t"<<endl;
+    if (cnt>65534) cout<<"change attribute token precision to uint32_t"<<endl;
     // Properties to location map
     numAttr = properties[0].size();
     for (int i=0; i<nb; i++){
@@ -76,8 +78,8 @@ void FilterIndex::get_index(string metric, string indexpath, int mode){
 
     clusterAlgo->train(dataset, nb, indexpath); //take the properties for Mode 3 bliss
     for(uint32_t j = 0; j < nb; ++j){  
-        for(uint32_t k = 0; k < d; ++k) {    
-            data_norms[j]=0;             
+        data_norms[j]=0;  //was a bug here, now removed         
+        for(uint32_t k = 0; k < d; ++k) {   
             data_norms[j] += dataset[j*d +k]*dataset[j*d +k];        
         } 
         data_norms[j]=data_norms[j]/2;
@@ -90,7 +92,7 @@ void FilterIndex::get_index(string metric, string indexpath, int mode){
         invLookup[i] = clusterAlgo->top(dataset+ i*d);   
     }
      for(uint32_t i = 0; i < nb; ++i) {
-        counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; 
+        counts[invLookup[i]+1] = counts[invLookup[i]+1]+1; // 0 5 4 6 3
     }
     for(uint32_t j = 1; j < nc+1; ++j) {
         counts[j] = counts[j]+ counts[j-1]; //cumsum 
@@ -186,6 +188,7 @@ void FilterIndex::loadIndex(string indexpath){
     FILE* f5 = fopen((indexpath+"/counts.bin").c_str(), "r");
     fread(counts, sizeof(uint32_t), nc+1, f5);
     get_mc_propertiesIndex();
+    cout<<"here1"<<endl;
     //this changes Lookup
     for (int i =0; i< nc*(treelen+1); i++){
         int m1 = counts[i];
@@ -195,6 +198,7 @@ void FilterIndex::loadIndex(string indexpath){
             return properties[a] < properties[b];
             });
     }
+    cout<<"here2"<<endl;
     // reorder data and index
     dataset_reordered = new float[nb*d];
     data_norms_reordered = new float[nb];
@@ -204,22 +208,24 @@ void FilterIndex::loadIndex(string indexpath){
         data_norms_reordered[i] = data_norms[Lookup[i]];
         memcpy(properties_reordered+ i*numAttr, properties[Lookup[i]].data(), sizeof(*properties_reordered) * numAttr);
     }
+    cout<<"here3"<<endl;
     delete dataset;
     delete data_norms;
     vector<vector<uint8_t>>().swap(properties);
 }
 
-void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int max_num_distances){
+void FilterIndex::query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int nprobe){
     neighbor_set = new int32_t[nq*num_results]{-1};
     cout<<"num queries: "<<nq<<", "<<"num max attributes: "<<numAttr<<endl;
     for (size_t i = 0; i < nq; i++){
         // run query
-        findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, max_num_distances, i);
+        cout<<"query: "<<i<<endl;
+        findNearestNeighbor(queryset+(i*d), queryprops[i], num_results, nprobe, i);
     }
 }
 
 // start from best cluster -> choose minicluster -> bruteforce search
-void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum)
+void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int nprobe, size_t qnum)
 {   
     chrono::time_point<chrono::high_resolution_clock> t1, t2,t2_1, t3, t4, t5, t6;
     t1 = chrono::high_resolution_clock::now();
@@ -236,7 +242,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     if (countX==numAttr) querymode = "noAttribute";
     else if (countX==0) querymode = "fixed";
     t2 = chrono::high_resolution_clock::now();
-
+    
     // sort(props.begin(), props.end());
     priority_queue<pair<float, uint32_t> > pq;
     uint32_t simid[nc];
@@ -245,18 +251,22 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     t2_1 = chrono::high_resolution_clock::now();
     // need argsorted IDs
     iota(simid, simid+nc, 0);
-    // partial_sort(simid, simid+100, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
-    sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
+    // good if nprobe is << nc
+    if (nprobe< nc/10)
+        nth_element(simid, simid + nprobe, simid + nc, [&simv](size_t i1, size_t i2) { return simv[i1] > simv[i2]; });
+    else
+        sort(simid, simid+nc, [&simv](size_t i1, size_t i2) {return simv[i1] > simv[i2];});
 
     priority_queue<pair<float, uint32_t> > Candidates_pq;
-    uint32_t Candidates[max_num_distances];
-    float score[max_num_distances];
+    cout<<querymode<<endl;
+    uint32_t Candidates[counts[nprobe]];
+    float score[counts[nprobe]];
     int seen=0, seenbin=0;
     float sim;
     float a=0,b=0;
     t3 = chrono::high_resolution_clock::now();
     if (querymode == "fixed"){
-        while(seen<max_num_distances && seenbin<nc){ 
+        while(seenbin<nprobe){ 
             uint32_t bin = simid[seenbin];
             seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
             int id = bin*(treelen+1);
@@ -265,7 +275,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
             //get which sub-cluster query belongs to
             uint16_t membership = getclusterPart(maxMC+ bin*3 , props, treelen);
             bin = bin+membership;
-            for (int i =counts[bin]; i< counts[bin+1] && seen<max_num_distances; i++){
+            for (int i =counts[bin]; i< counts[bin+1]; i++){
                 // __builtin_prefetch (properties_reordered +(i+2)*numAttr, 0, 2); software prefect is not very useful here
                 //check if constraint statisfies
                 int j =0;
@@ -278,15 +288,18 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
         }
     }
     else if (querymode == "varying"){
-        while(seen<max_num_distances && seenbin<nc){ 
+        cout<<nprobe<<endl;
+        while(seenbin<nprobe){ 
+            cout<<"seenbin :"<<seenbin<<endl;
             uint32_t bin = simid[seenbin];
             seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
             bin = bin*(treelen+1);
             // go through each sub partition
             bool checkremaining=true;
             for (uint16_t u=0;u<treelen; u++){
+                cout<<u<<" ";
                 if (props[maxMC[u*3+0]]==255){
-                    for (int i =counts[bin+u]; i< counts[bin+u+1] && seen<max_num_distances; i++){
+                    for (int i =counts[bin+u]; i< counts[bin+u+1]; i++){
                         //check if constraint statisfies
                         int j =0;
                         while (j<numAttr && (properties_reordered[i*numAttr +j]== props[j] | props[j]==255)) j++; 
@@ -297,7 +310,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
                     }
                 }
                 else if (maxMC[u*3+1] == props[maxMC[u*3+0]]){
-                    for (int i =counts[bin+u]; i< counts[bin+u+1] && seen<max_num_distances; i++){
+                    for (int i =counts[bin+u]; i< counts[bin+u+1]; i++){
                         //check if constraint statisfies
                         int j =0;
                         while (j<numAttr && (properties_reordered[i*numAttr +j]== props[j] | props[j]==255)) j++; 
@@ -311,7 +324,8 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
                 }
             }
             if (checkremaining == true){
-                for (int i =counts[bin+ treelen]; i< counts[bin+ treelen+1] && seen<max_num_distances; i++){
+                cout<<"checkremaining"<<" ";
+                for (int i =counts[bin+ treelen]; i< counts[bin+ treelen+1]; i++){
                         //check if constraint statisfies
                         int j =0;
                        while (j<numAttr && (properties_reordered[i*numAttr +j]== props[j] | props[j]==255)) j++; 
@@ -321,16 +335,17 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
                         }
                 }
             }
+            cout<<endl;
         }
     }
     else if (querymode == "noAttribute"){
-        while(seen<max_num_distances && seenbin<nc){ 
+        while(seenbin<nprobe){ 
             uint32_t bin = simid[seenbin];
             seenbin++; // not if we are probing multiple subbins, in case of varying #attrs
             bin = bin*(treelen+1);
             // go through each sub partition
             for (uint16_t u=0;u<treelen; u++){
-                for (int i =counts[bin+u]; i< counts[bin+u+1] && seen<max_num_distances; i++){
+                for (int i =counts[bin+u]; i< counts[bin+u+1]; i++){
                     Candidates[seen]=i; 
                     seen++;
                 }
@@ -341,6 +356,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
     t4 = chrono::high_resolution_clock::now();
     // NN distance computations
     float maxk;
+    cout<<"end of getting candidates "<<endl;
     if (seen<num_results+1){
         for (int i =0; i< seen; i++){ 
             neighbor_set[qnum*num_results+ i] = Lookup[Candidates[i]];
@@ -366,6 +382,7 @@ void FilterIndex::findNearestNeighbor(float* query, vector<string> Stprops, int 
             Candidates_pq.pop();
         }
     }
+    
     t5 = chrono::high_resolution_clock::now();
     // cout<<"time: "<<chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count()<<" ";
     // cout<<chrono::duration_cast<chrono::nanoseconds>(t2_1 - t2).count()<<" ";

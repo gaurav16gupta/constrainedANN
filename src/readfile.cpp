@@ -1,12 +1,10 @@
 #include <cassert>
 #include "readfile.h"
 #include <sys/stat.h>
-
 //#include "mnist/mnist_reader.hpp"
 
 using namespace std;
 
-//based off internet; make sure to change more later
 vector<vector<string>> getproperties(string fileName, char dlim)
 {
     vector<vector<string>> queryproperties;

@@ -7,8 +7,6 @@ from binReader import *
 from dataPrepare_constrained import *
 from utils import *
 
-# TODO: Identify where the bottleneck is and replace that with C++ function if it is not using the tf library
-
 def trainIndex(lookups_loc, train_data_loc, datasetName, model_save_loc, batch_size, B, vec_dim, hidden_dim,
                     r, gpu, gpu_usage, load_epoch, k2, n_epochs, mode, kn):
 

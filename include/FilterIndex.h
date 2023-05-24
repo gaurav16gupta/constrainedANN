@@ -31,7 +31,7 @@ class FilterIndex
 
         void loadIndex(string indexpath);
         void query(float* queryset, int nq, vector<vector<string>> queryprops, int num_results, int num_mini_probes);
-        void findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int max_num_distances, size_t qnum);
+        void findNearestNeighbor(float* query, vector<string> Stprops, int num_results, int nprobe, size_t qnum);
         vector<uint32_t> satisfyingIDs(vector<uint16_t> props);
         void get_mc_propertiesIndex();
         // bool not_in(uint16_t x, vector<pair<uint16_t, pair<uint16_t, int>>> &maxMC);
@@ -49,9 +49,6 @@ class FilterIndex
         int treelen;
         int numAttr;
 
-        // Kmeans kmeans;
-        // BLISS bliss;
-        // unique_ptr<cluster> clusterAlgo;
         cluster* clusterAlgo; // parent class
         unordered_map<uint8_t, uint8_t>PrpAtrMap;
         vector<vector<uint8_t>>properties;
