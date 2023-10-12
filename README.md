@@ -69,8 +69,10 @@ If using faiss kmeans run
 ```
 make index
 ./index data/sift/base.fvecs data/sift/label_base_3.txt indices/sift1024blissMode1 1024 kmeans 1
+./index ../downloads/sift/base.fvecs ../downloads/sift/label_base_3.txt indices/sift1024blissMode1 1024 kmeans 1
 make kmeans
 ./query data/sift/base.fvecs data/sift/label_base_3.txt data/sift/query.fvecs data/sift/label_query_3.txt indices/sift1024blissMode1 data/sift/label_3_hard_groundtruth.ivecs 1024 kmeans 1 500
+./query ../downloads/sift/base.fvecs ../downloads/sift/label_base_3.txt ../downloads/sift/query.fvecs ../downloads/sift/label_query_3.txt indices/sift1024blissMode1 ../downloads/sift/label_3_hard_groundtruth.ivecs 1024 kmeans 1 500
 ```
 
 Functionalities: 

@@ -69,13 +69,52 @@ int argparser(int argc, char** argv, string* basepath, string* labelpath, string
     return 0;
 }
 
+int argkparser(int argc, char** argv, string* basepath, string* labelpath, string* querypath, string* queryAttripath, string* indexpath, string* GTpath, size_t* nc, string* algo, int* mode, size_t* buffer_size, int* k){
+    if (argc < 8){
+        std::clog<<"Usage: "<<std::endl; 
+        std::clog<<"./index <data> <properties> <queries> <queryProperties> <index> <groundtruth>";
+        std::clog<<" [--Nc num_clusters] [--Algo method] [--mode method_version]"<<std::endl;
+
+        std::clog<<"Positional arguments: "<<std::endl;
+        std::clog<<"\t data: Filename pointing to an fvecs file (4 byte uint N, then list of  4 byte uint dim, then list of 32-bit little-endian floats)."<<std::endl;
+        std::clog<<"\t properties: Filename pointing to a properties file (text file containing <num points> <num attributes> <newline> whitespace-separated property lists)"<<std::endl;
+        std::clog<<"\t queries: file for the queries."<<std::endl;
+        std::clog<<"\t queryProperties: file for the queryProperties."<<std::endl;;
+        std::clog<<"\t index: folder for the index. Example : sift1024blissMode1, sift1024kmeans"<<std::endl;
+        std::clog<<"\t groundtruth: file for the groundtruth."<<std::endl;
+
+        std::clog<<"Optional arguments: "<<std::endl;
+        std::clog<<"\t [--Nc num_clusters]: (Optional, default 1024) Number of clusters/bins."<<std::endl;
+        std::clog<<"\t [--Algo method]: (Optional, default kmeans) MEthod used for clustering. Use either bliss or kmeans"<<std::endl;
+        std::clog<<"\t [--mode method_version]: (Optional, default 1) Only for bliss, use either 1,2 or 3. 1: embedding input - ANN labels, 2: embedding input - FilterANN labels, 3: embedding+Attribute input - FilterANN labels"<<std::endl;
+        std::clog<<"\t [--Bf BufferSize]: (Optional, default 500) Number of distance computations."<<std::endl;
+
+        return -1;
+    }
+
+    // Positional arguments.
+    *basepath = (string(argv[1])); 
+    *labelpath = (string(argv[2]));
+    *querypath = (string(argv[3]));
+    *queryAttripath = (string(argv[4])); 
+    *indexpath = (string(argv[5]));
+    *GTpath = (string(argv[6]));
+    *nc = std::atoi(argv[7]);
+    *algo = std::string(argv[8]);
+    *mode = std::atoi(argv[9]);
+    *buffer_size = std::atoi(argv[10]);
+    *k = std::atoi(argv[11]);
+    return 0;
+}
+
 double RecallAtK(int* answer, int* guess, size_t k, size_t nq){
     uint32_t count = 0;
     for (int i=0;i<nq;i++){
-        sort(answer+ k*i, answer + (i+1)*k);
+        // Editing here
+        sort(answer+ 100*i, answer + 100*i+k);
         sort(guess+ k*i, guess+ (i+1)*k);
         std::vector<int> tmp;
-        std::set_intersection(answer+ k*i, answer + (i+1)*k,  // Input iterators for first range 
+        std::set_intersection(answer+ 100*i, answer + 100*i+k,  // Input iterators for first range 
                             guess+ k*i, guess+ (i+1)*k, // Input iterators for second range 
                             std::back_inserter(tmp));
         count += double(tmp.size());

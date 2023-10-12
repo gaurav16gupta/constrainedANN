@@ -16,7 +16,8 @@ int main(int argc, char** argv)
 
     size_t d, nb, nq, num_results; 
     string datapath, Attripath, querypath, queryAttripath, indexpath, GTpath;
-    int success = argparser(argc, argv, &datapath, &Attripath, &querypath, &queryAttripath, &indexpath, &GTpath, &nc, &algo, &mode, &nprobe);
+    int k;
+    int success = argkparser(argc, argv, &datapath, &Attripath, &querypath, &queryAttripath, &indexpath, &GTpath, &nc, &algo, &mode, &nprobe, &k);
 
     float* data = fvecs_read(datapath.c_str(), &d, &nb);
     vector<vector<string>> properties = getproperties(Attripath,' ');
@@ -32,17 +33,16 @@ int main(int argc, char** argv)
     // nq = 10000;
     chrono::time_point<chrono::high_resolution_clock> t1, t2;
     t1 = chrono::high_resolution_clock::now();
-    myFilterIndex.query(queryset, nq, queryprops, num_results, nprobe);
+    myFilterIndex.query(queryset, nq, queryprops, k, nprobe);
     t2 = chrono::high_resolution_clock::now();
     std::chrono::duration<double> diff = t2 - t1;
 
     int32_t* output = myFilterIndex.neighbor_set;
-    int output_[num_results*nq];
-    copy(output, output+num_results*nq , output_);
-    cout<<"numClusters, buffersize, QPS, Recall100@100 :"<<endl;
+    int output_[k*nq];
+    copy(output, output+k*nq , output_);
+    cout<<"numClusters, buffersize, QPS, Recall" << k << "@" << k << ":" <<endl;
     //QPS and recall
     double QPS;
-    double recall = RecallAtK(queryGTlabel, output_, num_results, nq);
+    double recall = RecallAtK(queryGTlabel, output_, k, nq);
     printf("%d,%d,%f,%f\n",nc, nprobe, nq/diff.count(), recall);
 }
-

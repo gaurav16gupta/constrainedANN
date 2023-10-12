@@ -33,6 +33,7 @@
 using namespace std;
 int argparser(int argc, char** argv, string* basepath, string* labelpath, string* indexpath, size_t* nc, string* algo, int* mode);
 int argparser(int argc, char** argv, string* basepath, string* labelpath, string* querypath, string* queryAttripath, string* indexpath, string* GTpath, size_t* nc, string* algo, int* mode, size_t* buffer_size);
+int argkparser(int argc, char** argv, string* basepath, string* labelpath, string* querypath, string* queryAttripath, string* indexpath, string* GTpath, size_t* nc, string* algo, int* mode, size_t* buffer_size, int* k);
 double computeRecall(vector<vector<int>> answer, vector<vector<int>> guess);
 
 float IP(float* a, float* b, size_t d);
