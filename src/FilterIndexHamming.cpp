@@ -76,8 +76,8 @@ void FilterIndex::get_index(string metric, string indexpath, int mode){
 
     clusterAlgo->train(dataset, nb, indexpath); //take the properties for Mode 3 bliss
     for(uint32_t j = 0; j < nb; ++j){  
-        for(uint32_t k = 0; k < d; ++k) {    
-            data_norms[j]=0;             
+        data_norms[j]=0;
+        for(uint32_t k = 0; k < d; ++k) {      
             data_norms[j] += dataset[j*d +k]*dataset[j*d +k];        
         } 
         data_norms[j]=data_norms[j]/2;
